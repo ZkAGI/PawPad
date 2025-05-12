@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:solana_hackathon_2025/screens/settings_screen.dart';
 import 'package:solana_hackathon_2025/services/agent_provider.dart';
 import 'services/auth_provider.dart';
 import 'screens/pin_setup_screen.dart';
@@ -26,6 +27,11 @@ class SolanaWalletApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Solana Wallet',
+      routes: {
+        '/': (context) => const HomeScreen(),
+        '/settings': (context) => const SettingsScreen(),
+        // other routes
+      },
       theme: ThemeData(
         primarySwatch: Colors.blue,
         useMaterial3: true,
