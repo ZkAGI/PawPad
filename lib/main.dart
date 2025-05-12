@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:solana_hackathon_2025/services/agent_provider.dart';
 import 'services/auth_provider.dart';
-import 'services/solana_wallet_provider.dart';
 import 'screens/pin_setup_screen.dart';
 import 'screens/pin_login_screen.dart';
 import 'screens/home_screen.dart';
@@ -12,7 +12,7 @@ void main() {
     MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => AuthProvider()),
-        ChangeNotifierProvider(create: (_) => SolanaWalletProvider()),
+        ChangeNotifierProvider(create: (_) => AgentProvider()),
       ],
       child: const SolanaWalletApp(),
     ),
@@ -54,8 +54,6 @@ class _AuthCheckScreenState extends State<AuthCheckScreen> {
 
   Future<void> _checkAuthStatus() async {
     // Initialize the wallet provider
-    final walletProvider = Provider.of<SolanaWalletProvider>(context, listen: false);
-    await walletProvider.initialize();
 
     // Check if PIN is set
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
