@@ -28,7 +28,6 @@ class SolanaWalletApp extends StatelessWidget {
     return MaterialApp(
       title: 'Solana Wallet',
       routes: {
-        '/': (context) => const HomeScreen(),
         '/settings': (context) => const SettingsScreen(),
         // other routes
       },

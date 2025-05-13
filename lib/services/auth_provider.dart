@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:local_auth/local_auth.dart';
+import '../screens/home_screen.dart';
 import 'auth_service.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 class AuthProvider extends ChangeNotifier {
   final AuthService _authService = AuthService();
+  final FlutterSecureStorage _secureStorage = const FlutterSecureStorage();
   bool _isAuthenticated = false;
   bool _isLoading = true;
 
@@ -12,6 +15,30 @@ class AuthProvider extends ChangeNotifier {
 
   AuthProvider() {
     _checkAuthStatus();
+  }
+
+  Future<void> savePinAndNavigate(String pin, BuildContext context) async {
+    try {
+      // Save PIN securely
+      await _secureStorage.write(key: 'user_pin', value: pin);
+
+      _isAuthenticated = true;
+      notifyListeners();
+
+      // Add a slight delay before navigation to ensure storage completes
+      await Future.delayed(const Duration(milliseconds: 300));
+
+      // Use a more basic navigation approach to avoid rendering issues
+      if (context.mounted) {
+        // Replace the current screen instead of pushing a new one
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (context) => const HomeScreen()),
+        );
+      }
+    } catch (e) {
+      print('Error saving PIN: $e');
+      // Show error message to user
+    }
   }
 
   Future<void> _checkAuthStatus() async {
