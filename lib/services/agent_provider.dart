@@ -25,6 +25,23 @@ class AgentProvider extends ChangeNotifier {
   bool get isLoading => _isLoading;
 
   // Initialize provider
+  // Future<void> initialize() async {
+  //   try {
+  //     _isLoading = true;
+  //     notifyListeners();
+  //
+  //     _agentName = await _secureStorage.read(key: _agentNameKey);
+  //     _agentImagePath = await _secureStorage.read(key: _agentImagePathKey);
+  //
+  //     _isLoading = false;
+  //     notifyListeners();
+  //   } catch (e) {
+  //     debugPrint('Error initializing agent provider: $e');
+  //     _isLoading = false;
+  //     notifyListeners();
+  //   }
+  // }
+  // Initialize provider
   Future<void> initialize() async {
     try {
       _isLoading = true;
@@ -32,6 +49,9 @@ class AgentProvider extends ChangeNotifier {
 
       _agentName = await _secureStorage.read(key: _agentNameKey);
       _agentImagePath = await _secureStorage.read(key: _agentImagePathKey);
+
+      // Load wallet addresses
+      await loadAgentWalletAddresses();
 
       _isLoading = false;
       notifyListeners();
@@ -88,6 +108,84 @@ class AgentProvider extends ChangeNotifier {
   }
 
   // Add this method to the AgentProvider class
+  // Future<void> getOrCreateAgent({
+  //   required String name,
+  //   String? imagePath,
+  //   required bool bitcoinBuyAndHold,
+  //   required bool autonomousTrading,
+  // }) async {
+  //   try {
+  //     _isLoading = true;
+  //     notifyListeners();
+  //
+  //     // Check if agent already exists
+  //     final existingAgent = await _secureStorage.read(key: _agentNameKey);
+  //
+  //     if (existingAgent != null) {
+  //       // Agent exists, update it
+  //       await _secureStorage.write(key: _agentNameKey, value: name);
+  //       _agentName = name;
+  //
+  //       if (imagePath != null) {
+  //         await _secureStorage.write(key: _agentImagePathKey, value: imagePath);
+  //         _agentImagePath = imagePath;
+  //       }
+  //
+  //       // Store agent settings
+  //       await _secureStorage.write(key: 'bitcoin_buy_and_hold', value: bitcoinBuyAndHold.toString());
+  //       await _secureStorage.write(key: 'autonomous_trading', value: autonomousTrading.toString());
+  //     } else {
+  //       // Create new agent
+  //       await _secureStorage.write(key: _agentNameKey, value: name);
+  //       _agentName = name;
+  //
+  //       if (imagePath != null) {
+  //         await _secureStorage.write(key: _agentImagePathKey, value: imagePath);
+  //         _agentImagePath = imagePath;
+  //       }
+  //
+  //       // Store agent settings
+  //       await _secureStorage.write(key: 'bitcoin_buy_and_hold', value: bitcoinBuyAndHold.toString());
+  //       await _secureStorage.write(key: 'autonomous_trading', value: autonomousTrading.toString());
+  //
+  //       // Initialize agent on blockchain (mock for now)
+  //       // In the future, you might want to integrate with Solana here
+  //       // to create an actual on-chain agent entity
+  //       debugPrint('Creating agent on blockchain...');
+  //       await Future.delayed(const Duration(milliseconds: 500)); // Simulate blockchain interaction
+  //     }
+  //
+  //     _isLoading = false;
+  //     notifyListeners();
+  //   } catch (e) {
+  //     debugPrint('Error in getOrCreateAgent: $e');
+  //     _isLoading = false;
+  //     notifyListeners();
+  //     rethrow; // Rethrow so we can catch it in the UI
+  //   }
+  // }
+
+// Add these getters to retrieve agent settings
+  Future<bool> getBitcoinBuyAndHold() async {
+    final value = await _secureStorage.read(key: 'bitcoin_buy_and_hold');
+    return value?.toLowerCase() == 'true';
+  }
+
+  Future<bool> getAutonomousTrading() async {
+    final value = await _secureStorage.read(key: 'autonomous_trading');
+    return value?.toLowerCase() == 'true';
+  }
+
+  // Add a map to store agent wallet addresses
+  Map<String, String> _agentWalletAddresses = {};
+
+// Method to get agent wallet address
+  String? getAgentWalletAddress(String? agentName) {
+    if (agentName == null) return null;
+    return _agentWalletAddresses[agentName];
+  }
+
+// Update getOrCreateAgent to generate and store wallet address
   Future<void> getOrCreateAgent({
     required String name,
     String? imagePath,
@@ -100,8 +198,9 @@ class AgentProvider extends ChangeNotifier {
 
       // Check if agent already exists
       final existingAgent = await _secureStorage.read(key: _agentNameKey);
+      String walletAddress = '';
 
-      if (existingAgent != null) {
+      if (existingAgent != null && existingAgent == name) {
         // Agent exists, update it
         await _secureStorage.write(key: _agentNameKey, value: name);
         _agentName = name;
@@ -114,6 +213,9 @@ class AgentProvider extends ChangeNotifier {
         // Store agent settings
         await _secureStorage.write(key: 'bitcoin_buy_and_hold', value: bitcoinBuyAndHold.toString());
         await _secureStorage.write(key: 'autonomous_trading', value: autonomousTrading.toString());
+
+        // Get existing wallet address
+        walletAddress = await _secureStorage.read(key: '${name}_wallet_address') ?? '';
       } else {
         // Create new agent
         await _secureStorage.write(key: _agentNameKey, value: name);
@@ -128,12 +230,17 @@ class AgentProvider extends ChangeNotifier {
         await _secureStorage.write(key: 'bitcoin_buy_and_hold', value: bitcoinBuyAndHold.toString());
         await _secureStorage.write(key: 'autonomous_trading', value: autonomousTrading.toString());
 
-        // Initialize agent on blockchain (mock for now)
-        // In the future, you might want to integrate with Solana here
-        // to create an actual on-chain agent entity
-        debugPrint('Creating agent on blockchain...');
-        await Future.delayed(const Duration(milliseconds: 500)); // Simulate blockchain interaction
+        // Generate a new wallet address (in a real app, you'd integrate with Solana wallet creation)
+        // This is a dummy address for demonstration
+        walletAddress = 'sol' + List.generate(40, (index) =>
+        '0123456789abcdef'[DateTime.now().microsecondsSinceEpoch % 16]).join();
+
+        // Store the wallet address
+        await _secureStorage.write(key: '${name}_wallet_address', value: walletAddress);
       }
+
+      // Update in-memory wallet address map
+      _agentWalletAddresses[name] = walletAddress;
 
       _isLoading = false;
       notifyListeners();
@@ -141,18 +248,31 @@ class AgentProvider extends ChangeNotifier {
       debugPrint('Error in getOrCreateAgent: $e');
       _isLoading = false;
       notifyListeners();
-      rethrow; // Rethrow so we can catch it in the UI
+      rethrow;
     }
   }
 
-// Add these getters to retrieve agent settings
-  Future<bool> getBitcoinBuyAndHold() async {
-    final value = await _secureStorage.read(key: 'bitcoin_buy_and_hold');
-    return value?.toLowerCase() == 'true';
+// Method to load all agent wallet addresses on app start
+  Future<void> loadAgentWalletAddresses() async {
+    try {
+      // Clear existing addresses
+      _agentWalletAddresses.clear();
+
+      // Load current agent address if exists
+      if (_agentName != null) {
+        final address = await _secureStorage.read(key: '${_agentName}_wallet_address');
+        if (address != null) {
+          _agentWalletAddresses[_agentName!] = address;
+        }
+      }
+
+      // In a real app, you'd also load addresses for all other agents
+      // This would require storing a list of all agent names
+
+      notifyListeners();
+    } catch (e) {
+      debugPrint('Error loading agent wallet addresses: $e');
+    }
   }
 
-  Future<bool> getAutonomousTrading() async {
-    final value = await _secureStorage.read(key: 'autonomous_trading');
-    return value?.toLowerCase() == 'true';
-  }
 }
