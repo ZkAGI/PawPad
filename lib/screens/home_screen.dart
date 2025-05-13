@@ -1,45 +1,3 @@
-// import 'package:flutter/material.dart';
-// import 'package:provider/provider.dart';
-// import '../services/auth_provider.dart';
-// import 'pin_login_screen.dart';
-//
-// class HomeScreen extends StatelessWidget {
-//   const HomeScreen({Key? key}) : super(key: key);
-//
-//   @override
-//   Widget build(BuildContext context) {
-//     return Scaffold(
-//       appBar: AppBar(
-//         title: const Text('Solana Wallet'),
-//         actions: [
-//           IconButton(
-//             icon: const Icon(Icons.logout),
-//             onPressed: () {
-//               _signOut(context);
-//             },
-//           ),
-//         ],
-//       ),
-//       body: const Center(
-//         child: Text(
-//           'Home Screen',
-//           style: TextStyle(fontSize: 24),
-//         ),
-//       ),
-//     );
-//   }
-//
-//   void _signOut(BuildContext context) {
-//     final authProvider = Provider.of<AuthProvider>(context, listen: false);
-//     authProvider.signOut();
-//
-//     Navigator.pushReplacement(
-//       context,
-//       MaterialPageRoute(builder: (context) => const PinLoginScreen()),
-//     );
-//   }
-// }
-
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'dart:io';
@@ -200,11 +158,147 @@ class CreateAgentForm extends StatefulWidget {
   State<CreateAgentForm> createState() => _CreateAgentFormState();
 }
 
+// class _CreateAgentFormState extends State<CreateAgentForm> {
+//   final _formKey = GlobalKey<FormState>();
+//   final _nameController = TextEditingController();
+//   String? _imagePath;
+//   bool _isLoading = false;
+//
+//   @override
+//   void dispose() {
+//     _nameController.dispose();
+//     super.dispose();
+//   }
+//
+//   Future<void> _pickImage() async {
+//     final picker = ImagePicker();
+//     final pickedFile = await picker.pickImage(source: ImageSource.gallery);
+//
+//     if (pickedFile != null) {
+//       setState(() {
+//         _imagePath = pickedFile.path;
+//       });
+//     }
+//   }
+//
+//   @override
+//   Widget build(BuildContext context) {
+//     return Padding(
+//       padding: EdgeInsets.only(
+//         bottom: MediaQuery.of(context).viewInsets.bottom,
+//         left: 16,
+//         right: 16,
+//         top: 16,
+//       ),
+//       child: Form(
+//         key: _formKey,
+//         child: Column(
+//           mainAxisSize: MainAxisSize.min,
+//           crossAxisAlignment: CrossAxisAlignment.stretch,
+//           children: [
+//             const Text(
+//               'Create Trading Agent',
+//               style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+//               textAlign: TextAlign.center,
+//             ),
+//             const SizedBox(height: 24),
+//
+//             // Agent image picker
+//             Center(
+//               child: Stack(
+//                 children: [
+//                   CircleAvatar(
+//                     radius: 50,
+//                     backgroundColor: Colors.grey.shade200,
+//                     backgroundImage: _imagePath != null
+//                         ? FileImage(File(_imagePath!))
+//                         : null,
+//                     child: _imagePath == null
+//                         ? const Icon(Icons.person, size: 50, color: Colors.grey)
+//                         : null,
+//                   ),
+//                   Positioned(
+//                     bottom: 0,
+//                     right: 0,
+//                     child: InkWell(
+//                       onTap: _pickImage,
+//                       child: Container(
+//                         padding: const EdgeInsets.all(4),
+//                         decoration: const BoxDecoration(
+//                           color: Colors.blue,
+//                           shape: BoxShape.circle,
+//                         ),
+//                         child: const Icon(
+//                           Icons.camera_alt,
+//                           color: Colors.white,
+//                           size: 20,
+//                         ),
+//                       ),
+//                     ),
+//                   ),
+//                 ],
+//               ),
+//             ),
+//             const SizedBox(height: 16),
+//
+//             // Agent name field
+//             TextFormField(
+//               controller: _nameController,
+//               decoration: const InputDecoration(
+//                 labelText: 'Agent Name',
+//                 border: OutlineInputBorder(),
+//               ),
+//               validator: (value) {
+//                 if (value == null || value.isEmpty) {
+//                   return 'Please enter a name for your agent';
+//                 }
+//                 return null;
+//               },
+//             ),
+//             const SizedBox(height: 24),
+//
+//             // Create button
+//             ElevatedButton(
+//               onPressed: _isLoading
+//                   ? null
+//                   : () async {
+//                 if (_formKey.currentState!.validate()) {
+//                   setState(() {
+//                     _isLoading = true;
+//                   });
+//
+//                   // Save agent data
+//                   await Provider.of<AgentProvider>(context, listen: false)
+//                       .createAgent(
+//                     name: _nameController.text,
+//                     imagePath: _imagePath,
+//                   );
+//
+//                   // Close the modal
+//                   if (context.mounted) {
+//                     Navigator.pop(context);
+//                   }
+//                 }
+//               },
+//               child: _isLoading
+//                   ? const CircularProgressIndicator()
+//                   : const Text('Create Agent'),
+//             ),
+//             const SizedBox(height: 16),
+//           ],
+//         ),
+//       ),
+//     );
+//   }
+// }
 class _CreateAgentFormState extends State<CreateAgentForm> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   String? _imagePath;
   bool _isLoading = false;
+  // Add toggle state variables
+  bool _bitcoinBuyAndHold = false;
+  bool _autonomousTrading = false;
 
   @override
   void dispose() {
@@ -297,6 +391,32 @@ class _CreateAgentFormState extends State<CreateAgentForm> {
                 return null;
               },
             ),
+            const SizedBox(height: 16),
+
+            // Bitcoin Buy & Hold toggle
+            SwitchListTile(
+              title: const Text('Bitcoin Buy & Hold'),
+              subtitle: const Text('Enable long-term Bitcoin investment strategy'),
+              value: _bitcoinBuyAndHold,
+              onChanged: (value) {
+                setState(() {
+                  _bitcoinBuyAndHold = value;
+                });
+              },
+            ),
+
+            // Autonomous Trading toggle
+            SwitchListTile(
+              title: const Text('Autonomous Trading'),
+              subtitle: const Text('Allow agent to trade automatically based on market conditions'),
+              value: _autonomousTrading,
+              onChanged: (value) {
+                setState(() {
+                  _autonomousTrading = value;
+                });
+              },
+            ),
+
             const SizedBox(height: 24),
 
             // Create button
@@ -309,16 +429,46 @@ class _CreateAgentFormState extends State<CreateAgentForm> {
                     _isLoading = true;
                   });
 
-                  // Save agent data
-                  await Provider.of<AgentProvider>(context, listen: false)
-                      .createAgent(
-                    name: _nameController.text,
-                    imagePath: _imagePath,
-                  );
+                  try {
+                    // Call getOrCreateAgent function
+                    await Provider.of<AgentProvider>(context, listen: false)
+                        .getOrCreateAgent(
+                      name: _nameController.text,
+                      imagePath: _imagePath,
+                      bitcoinBuyAndHold: _bitcoinBuyAndHold,
+                      autonomousTrading: _autonomousTrading,
+                    );
 
-                  // Close the modal
-                  if (context.mounted) {
-                    Navigator.pop(context);
+                    // Show success toast message
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Agent created successfully!'),
+                          backgroundColor: Colors.green,
+                          behavior: SnackBarBehavior.floating,
+                        ),
+                      );
+
+                      // Close the modal
+                      Navigator.pop(context);
+                    }
+                  } catch (e) {
+                    // Show error toast
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('Error creating agent: $e'),
+                          backgroundColor: Colors.red,
+                          behavior: SnackBarBehavior.floating,
+                        ),
+                      );
+                    }
+                  } finally {
+                    if (mounted) {
+                      setState(() {
+                        _isLoading = false;
+                      });
+                    }
                   }
                 }
               },
