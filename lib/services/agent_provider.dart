@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'dart:math'; // For generating random addresses
+import 'package:solana/solana.dart';
 
 class AgentProvider extends ChangeNotifier {
   final FlutterSecureStorage _secureStorage = const FlutterSecureStorage();
@@ -32,6 +33,55 @@ class AgentProvider extends ChangeNotifier {
   String? getAgentWalletAddress(String? agentName) {
     if (agentName == null) return null;
     return _agentWalletAddresses[agentName];
+  }
+
+  Future<double> getAgentBalance(String agentName) async {
+    try {
+      // Check if this is a real agent or trending agent
+      if (_agentWalletAddresses.containsKey(agentName)) {
+        // This is your implementation of the getBalance function they provided
+        // For now, return a simulated balance since we don't have the actual wallet integration
+        return await _getSimulatedBalance(agentName);
+      } else {
+        // For trending agents, return a random balance
+        return 0.0; // These are just examples, so no balance
+      }
+    } catch (e) {
+      debugPrint('Error getting balance: $e');
+      return 0.0;
+    }
+  }
+
+  // Simulated balance function - replace with real implementation when ready
+  Future<double> _getSimulatedBalance(String agentName) async {
+    // This would be replaced with the real getBalance() function provided
+    // For now, return a random balance between 1.0 and 9.99
+    await Future.delayed(const Duration(milliseconds: 500)); // Simulate network delay
+
+    // For demo purposes, make balance consistent for the same agent name
+    final hash = agentName.hashCode;
+    final random = Random(hash);
+    return 1.0 + random.nextDouble() * 8.99;
+
+    /*
+    // Real implementation would look something like this:
+    final wallet = await getOrCreateWallet();
+    final client = SolanaClient(
+      rpcUrl: Uri.parse(_rpcUrl),
+      websocketUrl: Uri.parse(_webSocketUrl),
+    );
+    try {
+      final balance = await client.rpcClient.getBalance(
+        wallet.address,
+        commitment: Commitment.confirmed,
+      );
+
+      // Convert from lamports to SOL
+      return balance.value / 1000000000;
+    } catch (e) {
+      throw Exception('Failed to get balance: ${e.toString()}');
+    }
+    */
   }
 
   // Generate a realistic-looking Solana wallet address

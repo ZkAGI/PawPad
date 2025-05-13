@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'dart:io';
 import '../services/agent_provider.dart';
+import '../services/auth_provider.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:flutter/services.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({Key? key}) : super(key: key);
@@ -14,23 +15,50 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   String? selectedAgentName;
+  bool _isLoadingBalance = false;
+  double _currentBalance = 0.0;
 
   @override
   void initState() {
     super.initState();
-    // Initialize selected agent from provider when screen loads
-    Future.delayed(Duration.zero, () {
-      final agentProvider = Provider.of<AgentProvider>(context, listen: false);
-      if (agentProvider.agentName != null) {
-        setState(() {
-          selectedAgentName = agentProvider.agentName;
-        });
-      }
+    // Initialize with first agent and fetch balance
+    _initializeSelectedAgent();
+  }
+
+  Future<void> _initializeSelectedAgent() async {
+    // We'll fetch the balance right away
+    _refreshBalance();
+  }
+
+  Future<void> _refreshBalance() async {
+    final agentProvider = Provider.of<AgentProvider>(context, listen: false);
+
+    // Exit early if no agent exists
+    if (agentProvider.agentName == null) return;
+
+    setState(() {
+      _isLoadingBalance = true;
     });
+
+    try {
+      // Always use the current agent from the provider
+      final balance = await agentProvider.getAgentBalance(agentProvider.agentName!);
+
+      setState(() {
+        _currentBalance = balance;
+        _isLoadingBalance = false;
+      });
+    } catch (e) {
+      setState(() {
+        _isLoadingBalance = false;
+      });
+      print('Error refreshing balance: $e');
+    }
   }
 
   void _copyWalletAddress(BuildContext context, AgentProvider agentProvider) {
-    final address = agentProvider.getAgentWalletAddress(selectedAgentName);
+    // Always use the current agent from the provider
+    final address = agentProvider.getAgentWalletAddress(agentProvider.agentName);
 
     if (address != null && address.isNotEmpty) {
       Clipboard.setData(ClipboardData(text: address));
@@ -51,19 +79,14 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+
   @override
   Widget build(BuildContext context) {
     final agentProvider = Provider.of<AgentProvider>(context);
-
-    // Get all available agents
-    List<String> availableAgents = [
-      if (agentProvider.agentName != null) agentProvider.agentName!,
-      // Add any other agents from your storage
-    ];
-
-    // If no agent exists yet and not already in list, add the trending agents
-    if (!agentProvider.hasAgent || availableAgents.isEmpty) {
-      availableAgents = agentProvider.trendingAgents.map((agent) => agent['name']!).toList();
+    List<String> availableAgents = [];
+    if (agentProvider.agentName != null) {
+      availableAgents.add(agentProvider.agentName!);
+      // Add any other real agents here when you have multiple agent support
     }
 
     return Scaffold(
@@ -71,7 +94,7 @@ class _HomeScreenState extends State<HomeScreen> {
         title: const Text('PawPad'),
         actions: [
           // Agent selector with dropdown and icon
-          if (agentProvider.hasAgent)
+          if (agentProvider.hasAgent || availableAgents.isNotEmpty)
             Row(
               children: [
                 // Agent status icon
@@ -105,14 +128,17 @@ class _HomeScreenState extends State<HomeScreen> {
 
                 // Agent dropdown
                 DropdownButton<String>(
-                  value: selectedAgentName,
-                  hint: const Text('Select Agent'),
+                  // Always use the agent name if available, even if selectedAgentName is null
+                  value: agentProvider.agentName ?? selectedAgentName,
+                  // Remove the hint since we'll always have a value
+                  // hint: const Text('Select Agent'),  // Remove this line
                   underline: Container(),
                   onChanged: (String? newValue) {
                     if (newValue != null) {
                       setState(() {
                         selectedAgentName = newValue;
                       });
+                      _refreshBalance();
                     }
                   },
                   items: availableAgents
@@ -127,7 +153,7 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
 
           // Copy wallet address button
-          if (agentProvider.hasAgent)
+          if (agentProvider.hasAgent || availableAgents.isNotEmpty)
             IconButton(
               icon: const Icon(Icons.copy),
               onPressed: () => _copyWalletAddress(context, agentProvider),
@@ -147,6 +173,62 @@ class _HomeScreenState extends State<HomeScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // Agent Balance Display
+            if (agentProvider.hasAgent)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                child: Card(
+                  elevation: 2,
+                  child: Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text(
+                              'Balance',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.refresh, size: 20),
+                              onPressed: _refreshBalance,
+                              tooltip: 'Refresh balance',
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        _isLoadingBalance
+                            ? const Center(child: CircularProgressIndicator(strokeWidth: 2))
+                            : Row(
+                          children: [
+                            Text(
+                              '\$ ${_currentBalance.toStringAsFixed(2)}',
+                              style: const TextStyle(
+                                fontSize: 32,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            const Text(
+                              'USD',
+                              style: TextStyle(
+                                fontSize: 16,
+                                color: Colors.grey,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+
             // Banner for new users
             if (!agentProvider.hasAgent) _buildNoAgentBanner(context),
 
@@ -269,7 +351,7 @@ class _HomeScreenState extends State<HomeScreen> {
       builder: (context) => const CreateAgentForm(),
     );
   }
- }
+}
 
 // Create Agent Form Modal
 class CreateAgentForm extends StatefulWidget {
@@ -426,6 +508,11 @@ class _CreateAgentFormState extends State<CreateAgentForm> {
                       bitcoinBuyAndHold: _bitcoinBuyAndHold,
                       autonomousTrading: _autonomousTrading,
                     );
+
+                    if (context.mounted) {
+                      // This will trigger a rebuild of the HomeScreen
+                      Provider.of<AgentProvider>(context, listen: false).notifyListeners();
+                    }
 
                     // Show success toast message
                     if (context.mounted) {
