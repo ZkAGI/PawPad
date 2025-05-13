@@ -6,6 +6,8 @@ import '../services/agent_provider.dart';
 import '../services/auth_provider.dart';
 import 'package:image_picker/image_picker.dart';
 
+import '../widgets/gradient_card.dart';
+
 class HomeScreen extends StatefulWidget {
   const HomeScreen({Key? key}) : super(key: key);
 
@@ -130,9 +132,13 @@ class _HomeScreenState extends State<HomeScreen> {
                 DropdownButton<String>(
                   // Always use the agent name if available, even if selectedAgentName is null
                   value: agentProvider.agentName ?? selectedAgentName,
+
                   // Remove the hint since we'll always have a value
                   // hint: const Text('Select Agent'),  // Remove this line
                   underline: Container(),
+                  dropdownColor: const Color(0xFF000A19),                // dropdown’s background
+                  iconEnabledColor: Colors.white,                         // the arrow
+                  style: const TextStyle(color: Colors.white, fontSize: 14),
                   onChanged: (String? newValue) {
                     if (newValue != null) {
                       setState(() {
@@ -156,6 +162,7 @@ class _HomeScreenState extends State<HomeScreen> {
           if (agentProvider.hasAgent || availableAgents.isNotEmpty)
             IconButton(
               icon: const Icon(Icons.copy),
+              color: Colors.white,
               onPressed: () => _copyWalletAddress(context, agentProvider),
               tooltip: 'Copy wallet address',
             ),
@@ -163,6 +170,7 @@ class _HomeScreenState extends State<HomeScreen> {
           // Settings icon
           IconButton(
             icon: const Icon(Icons.settings),
+            color: Colors.white,
             onPressed: () => Navigator.pushNamed(context, '/settings'),
           ),
         ],
@@ -179,6 +187,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
                 child: Card(
                   elevation: 2,
+                  child:gradientCard(
                   child: Padding(
                     padding: const EdgeInsets.all(16.0),
                     child: Column(
@@ -190,8 +199,9 @@ class _HomeScreenState extends State<HomeScreen> {
                             const Text(
                               'Balance',
                               style: TextStyle(
-                                fontSize: 16,
+                                fontSize: 30,
                                 fontWeight: FontWeight.bold,
+                                color: Colors.white,
                               ),
                             ),
                             IconButton(
@@ -209,8 +219,9 @@ class _HomeScreenState extends State<HomeScreen> {
                             Text(
                               '\$ ${_currentBalance.toStringAsFixed(2)}',
                               style: const TextStyle(
-                                fontSize: 32,
+                                fontSize: 28,
                                 fontWeight: FontWeight.bold,
+                                color: Colors.white,
                               ),
                             ),
                             const SizedBox(width: 8),
@@ -226,9 +237,9 @@ class _HomeScreenState extends State<HomeScreen> {
                       ],
                     ),
                   ),
+                  ),
                 ),
               ),
-
             // Banner for new users
             if (!agentProvider.hasAgent) _buildNoAgentBanner(context),
 
@@ -242,7 +253,8 @@ class _HomeScreenState extends State<HomeScreen> {
                     'Trending Agents',
                     style: TextStyle(
                         fontSize: 20,
-                        fontWeight: FontWeight.bold
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white
                     ),
                   ),
                   const SizedBox(height: 16),
@@ -266,20 +278,16 @@ class _HomeScreenState extends State<HomeScreen> {
     // Existing code...
     return Container(
       margin: const EdgeInsets.all(16.0),
-      padding: const EdgeInsets.all(16.0),
-      decoration: BoxDecoration(
-        color: Colors.blue.shade50,
-        borderRadius: BorderRadius.circular(8.0),
-        border: Border.all(color: Colors.blue.shade200),
-      ),
+      child:gradientCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text(
             'Create Your Trading Agent Today',
             style: TextStyle(
-              fontSize: 18,
+              fontSize: 24,
               fontWeight: FontWeight.bold,
+              color: Colors.white
             ),
           ),
           const SizedBox(height: 8),
@@ -287,6 +295,7 @@ class _HomeScreenState extends State<HomeScreen> {
             'Get started with automated trading on Solana',
             style: TextStyle(
               fontSize: 14,
+              color: Colors.white
             ),
           ),
           const SizedBox(height: 16),
@@ -295,6 +304,7 @@ class _HomeScreenState extends State<HomeScreen> {
             child: const Text('Create Agent'),
           ),
         ],
+      ),
       ),
     );
   }
@@ -311,6 +321,7 @@ class _HomeScreenState extends State<HomeScreen> {
           final agent = agentProvider.trendingAgents[index];
           return Card(
             margin: const EdgeInsets.only(right: 12),
+            child:gradientCard(
             child: Container(
               width: 120,
               padding: const EdgeInsets.all(8),
@@ -332,6 +343,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ],
               ),
+            ),
             ),
           );
         },
