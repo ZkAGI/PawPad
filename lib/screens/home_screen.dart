@@ -2,16 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'dart:io';
 import '../services/agent_provider.dart';
-import '../services/auth_provider.dart';
 import 'package:image_picker/image_picker.dart';
-
-import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:provider/provider.dart';
-import 'dart:io';
-import '../services/agent_provider.dart';
-import '../services/auth_provider.dart';
-import 'package:image_picker/image_picker.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({Key? key}) : super(key: key);
@@ -37,12 +29,14 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
-  void _copyWalletAddress(BuildContext context, String? address) {
-    if (address != null) {
+  void _copyWalletAddress(BuildContext context, AgentProvider agentProvider) {
+    final address = agentProvider.getAgentWalletAddress(selectedAgentName);
+
+    if (address != null && address.isNotEmpty) {
       Clipboard.setData(ClipboardData(text: address));
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Wallet address copied to clipboard'),
+        SnackBar(
+          content: Text('Wallet address copied: $address'),
           behavior: SnackBarBehavior.floating,
         ),
       );
@@ -61,7 +55,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     final agentProvider = Provider.of<AgentProvider>(context);
 
-    // Get all available agents (for now just dummy data + current agent)
+    // Get all available agents
     List<String> availableAgents = [
       if (agentProvider.agentName != null) agentProvider.agentName!,
       // Add any other agents from your storage
@@ -74,119 +68,108 @@ class _HomeScreenState extends State<HomeScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('PawPad'),  // Changed to PawPad as requested
+        title: const Text('PawPad'),
         actions: [
+          // Agent selector with dropdown and icon
+          if (agentProvider.hasAgent)
+            Row(
+              children: [
+                // Agent status icon
+                Stack(
+                  children: [
+                    Container(
+                      width: 28,
+                      height: 28,
+                      margin: const EdgeInsets.only(right: 4),
+                      decoration: BoxDecoration(
+                        color: Colors.orange.shade100,
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(Icons.auto_awesome, size: 16, color: Colors.orange.shade700),
+                    ),
+                    Positioned(
+                      right: 4,
+                      bottom: 0,
+                      child: Container(
+                        width: 8,
+                        height: 8,
+                        decoration: BoxDecoration(
+                          color: Colors.grey, // Grey for inactive state
+                          shape: BoxShape.circle,
+                          border: Border.all(color: Colors.white, width: 1),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+
+                // Agent dropdown
+                DropdownButton<String>(
+                  value: selectedAgentName,
+                  hint: const Text('Select Agent'),
+                  underline: Container(),
+                  onChanged: (String? newValue) {
+                    if (newValue != null) {
+                      setState(() {
+                        selectedAgentName = newValue;
+                      });
+                    }
+                  },
+                  items: availableAgents
+                      .map<DropdownMenuItem<String>>((String value) {
+                    return DropdownMenuItem<String>(
+                      value: value,
+                      child: Text(value, style: const TextStyle(fontSize: 14)),
+                    );
+                  }).toList(),
+                ),
+              ],
+            ),
+
+          // Copy wallet address button
+          if (agentProvider.hasAgent)
+            IconButton(
+              icon: const Icon(Icons.copy),
+              onPressed: () => _copyWalletAddress(context, agentProvider),
+              tooltip: 'Copy wallet address',
+            ),
+
+          // Settings icon
           IconButton(
             icon: const Icon(Icons.settings),
             onPressed: () => Navigator.pushNamed(context, '/settings'),
           ),
         ],
       ),
-      body: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Agent selector with dropdown and copy button
-          if (agentProvider.hasAgent)
+      body: agentProvider.isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : SingleChildScrollView(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Banner for new users
+            if (!agentProvider.hasAgent) _buildNoAgentBanner(context),
+
+            // Trending Agents Section
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-              child: Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(8.0),
-                  child: Row(
-                    children: [
-                      // Agent icon
-                      Container(
-                        width: 36,
-                        height: 36,
-                        decoration: BoxDecoration(
-                          color: Colors.grey.shade200,
-                          shape: BoxShape.circle,
-                        ),
-                        child: Icon(Icons.auto_awesome, color: Colors.orange.shade700),
-                      ),
-                      const SizedBox(width: 8),
-
-                      // Agent dropdown
-                      DropdownButton<String>(
-                        value: selectedAgentName,
-                        hint: const Text('Select Agent'),
-                        underline: Container(),
-                        onChanged: (String? newValue) {
-                          if (newValue != null) {
-                            setState(() {
-                              selectedAgentName = newValue;
-                            });
-                            // Update selected agent in provider
-                            // You'd implement logic to load the selected agent's data
-                          }
-                        },
-                        items: availableAgents
-                            .map<DropdownMenuItem<String>>((String value) {
-                          return DropdownMenuItem<String>(
-                            value: value,
-                            child: Text(value),
-                          );
-                        }).toList(),
-                      ),
-
-                      const Spacer(),
-
-                      // Copy button for wallet address
-                      Container(
-                        decoration: BoxDecoration(
-                          color: Colors.grey.shade200,
-                          shape: BoxShape.circle,
-                        ),
-                        child: IconButton(
-                          icon: const Icon(Icons.copy, size: 20),
-                          onPressed: () {
-                            // Get the wallet address from the provider
-                            final address = agentProvider.getAgentWalletAddress(selectedAgentName);
-                            _copyWalletAddress(context, address);
-                          },
-                          tooltip: 'Copy wallet address',
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-
-          // Rest of the body content
-          Expanded(
-            child: agentProvider.isLoading
-                ? const Center(child: CircularProgressIndicator())
-                : SingleChildScrollView(
+              padding: const EdgeInsets.all(16.0),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Banner for new users
-                  if (!agentProvider.hasAgent) _buildNoAgentBanner(context),
-
-                  // Trending Agents Section
-                  Padding(
-                    padding: const EdgeInsets.all(16.0),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'Trending Agents',
-                          style: TextStyle(
-                              fontSize: 20,
-                              fontWeight: FontWeight.bold
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-                        _buildTrendingAgentsList(context, agentProvider),
-                      ],
+                  const Text(
+                    'Trending Agents',
+                    style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold
                     ),
                   ),
+                  const SizedBox(height: 16),
+                  _buildTrendingAgentsList(context, agentProvider),
                 ],
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
       // + button at bottom right
       floatingActionButton: FloatingActionButton(
@@ -287,152 +270,6 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
  }
-
-//
-// class HomeScreen extends StatelessWidget {
-//   const HomeScreen({Key? key}) : super(key: key);
-//
-//   @override
-//   Widget build(BuildContext context) {
-//     final agentProvider = Provider.of<AgentProvider>(context);
-//
-//     return Scaffold(
-//       appBar: AppBar(
-//         title: const Text('Solana Trading Agent'),
-//         actions: [
-//           // Settings icon
-//           IconButton(
-//             icon: const Icon(Icons.settings),
-//             onPressed: () => Navigator.pushNamed(context, '/settings'),
-//           ),
-//         ],
-//       ),
-//       body: agentProvider.isLoading
-//           ? const Center(child: CircularProgressIndicator())
-//           : SingleChildScrollView(
-//         child: Column(
-//           crossAxisAlignment: CrossAxisAlignment.start,
-//           children: [
-//             // Banner for new users
-//             if (!agentProvider.hasAgent) _buildNoAgentBanner(context),
-//
-//             // Trending Agents Section
-//             Padding(
-//               padding: const EdgeInsets.all(16.0),
-//               child: Column(
-//                 crossAxisAlignment: CrossAxisAlignment.start,
-//                 children: [
-//                   const Text(
-//                     'Trending Agents',
-//                     style: TextStyle(
-//                         fontSize: 20,
-//                         fontWeight: FontWeight.bold
-//                     ),
-//                   ),
-//                   const SizedBox(height: 16),
-//                   _buildTrendingAgentsList(context, agentProvider),
-//                 ],
-//               ),
-//             ),
-//           ],
-//         ),
-//       ),
-//       // + button at bottom right
-//       floatingActionButton: FloatingActionButton(
-//         onPressed: () => _showCreateAgentModal(context),
-//         child: const Icon(Icons.add),
-//       ),
-//     );
-//   }
-//
-//   // Banner widget for new users
-//   Widget _buildNoAgentBanner(BuildContext context) {
-//     return Container(
-//       margin: const EdgeInsets.all(16.0),
-//       padding: const EdgeInsets.all(16.0),
-//       decoration: BoxDecoration(
-//         color: Colors.blue.shade50,
-//         borderRadius: BorderRadius.circular(8.0),
-//         border: Border.all(color: Colors.blue.shade200),
-//       ),
-//       child: Column(
-//         crossAxisAlignment: CrossAxisAlignment.start,
-//         children: [
-//           const Text(
-//             'Create Your Trading Agent Today',
-//             style: TextStyle(
-//               fontSize: 18,
-//               fontWeight: FontWeight.bold,
-//             ),
-//           ),
-//           const SizedBox(height: 8),
-//           const Text(
-//             'Get started with automated trading on Solana',
-//             style: TextStyle(
-//               fontSize: 14,
-//             ),
-//           ),
-//           const SizedBox(height: 16),
-//           ElevatedButton(
-//             onPressed: () => _showCreateAgentModal(context),
-//             child: const Text('Create Agent'),
-//           ),
-//         ],
-//       ),
-//     );
-//   }
-//
-//   // Trending agents list
-//   Widget _buildTrendingAgentsList(BuildContext context, AgentProvider agentProvider) {
-//     return SizedBox(
-//       height: 150,
-//       child: ListView.builder(
-//         scrollDirection: Axis.horizontal,
-//         itemCount: agentProvider.trendingAgents.length,
-//         itemBuilder: (context, index) {
-//           final agent = agentProvider.trendingAgents[index];
-//           return Card(
-//             margin: const EdgeInsets.only(right: 12),
-//             child: Container(
-//               width: 120,
-//               padding: const EdgeInsets.all(8),
-//               child: Column(
-//                 mainAxisAlignment: MainAxisAlignment.center,
-//                 children: [
-//                   CircleAvatar(
-//                     radius: 30,
-//                     backgroundColor: Colors.grey.shade200,
-//                     child: const Icon(Icons.person, size: 30, color: Colors.grey),
-//                   ),
-//                   const SizedBox(height: 8),
-//                   Text(
-//                     agent['name'] ?? 'Agent',
-//                     style: const TextStyle(fontWeight: FontWeight.bold),
-//                     textAlign: TextAlign.center,
-//                     maxLines: 2,
-//                     overflow: TextOverflow.ellipsis,
-//                   ),
-//                 ],
-//               ),
-//             ),
-//           );
-//         },
-//       ),
-//     );
-//   }
-//
-//   // Modal for creating a new agent
-//   void _showCreateAgentModal(BuildContext context) {
-//     showModalBottomSheet(
-//       context: context,
-//       isScrollControlled: true,
-//       shape: const RoundedRectangleBorder(
-//         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-//       ),
-//       builder: (context) => const CreateAgentForm(),
-//     );
-//   }
-// }
 
 // Create Agent Form Modal
 class CreateAgentForm extends StatefulWidget {
