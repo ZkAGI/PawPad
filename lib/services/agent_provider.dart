@@ -259,4 +259,29 @@ class AgentProvider extends ChangeNotifier {
       debugPrint('Error updating agent image: $e');
     }
   }
+
+  // Add this method to your AgentProvider class
+  Future<String> getPrivateKey() async {
+    try {
+      final mnemonic = await _secureStorage.read(key: 'mnemonic');
+      if (mnemonic == null) {
+        throw Exception('No wallet found');
+      }
+
+      // This is a placeholder - in a real app you'd implement the Ed25519HDKeyPair.fromMnemonic
+      // For demo purposes, we'll return a dummy private key
+      // In production, uncomment and implement the real code:
+
+      // final wallet = await Ed25519HDKeyPair.fromMnemonic(mnemonic);
+      // final extracted = await wallet.extract();
+      // final privateKeyBytes = extracted.bytes.sublist(0, 32);
+      // return privateKeyBytes.map((e) => e.toRadixString(16).padLeft(2, '0')).join();
+
+      // For demo:
+      await Future.delayed(const Duration(milliseconds: 500)); // Simulate processing
+      return "1a2b3c4d5e6f7g8h9i0j1k2l3m4n5o6p7q8r9s0t1u2v3w4x5y6z7";
+    } catch (e) {
+      throw Exception('Failed to get private key: ${e.toString()}');
+    }
+  }
 }

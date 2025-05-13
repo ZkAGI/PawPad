@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'dart:io';
+import 'package:image_picker/image_picker.dart';
+import 'package:local_auth/local_auth.dart';
 import '../services/agent_provider.dart';
 import '../services/auth_provider.dart';
-import 'package:image_picker/image_picker.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({Key? key}) : super(key: key);
@@ -16,7 +18,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
   final _nameController = TextEditingController();
   String? _newImagePath;
   bool _isEditingName = false;
-  bool _showPrivateKey = false;
   bool _whitelistAssets = false;
 
   @override
@@ -50,6 +51,209 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
+  void _showAuthenticationDialog() {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          title: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text('Authentication Required'),
+              IconButton(
+                icon: const Icon(Icons.close),
+                onPressed: () => Navigator.of(context).pop(),
+              ),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('Please authenticate to view your private key'),
+              const SizedBox(height: 20),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  // Biometric option
+                  ElevatedButton.icon(
+                    icon: const Icon(Icons.fingerprint),
+                    label: const Text('Biometric'),
+                    onPressed: () {
+                      Navigator.pop(context);
+                      _authenticateWithBiometrics();
+                    },
+                  ),
+                  // PIN option
+                  ElevatedButton.icon(
+                    icon: const Icon(Icons.pin),
+                    label: const Text('PIN'),
+                    onPressed: () {
+                      Navigator.pop(context);
+                      _authenticateWithPIN();
+                    },
+                  ),
+                ],
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _authenticateWithBiometrics() async {
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    final success = await authProvider.authenticateWithBiometrics();
+
+    if (success && mounted) {
+      _showPrivateKeyDialog();
+    } else if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Authentication failed'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  Future<void> _authenticateWithPIN() async {
+    // Show PIN input dialog
+    final pin = await showDialog<String>(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        final pinController = TextEditingController();
+        return AlertDialog(
+          title: const Text('Enter PIN'),
+          content: TextField(
+            controller: pinController,
+            keyboardType: TextInputType.number,
+            maxLength: 4,
+            obscureText: true,
+            decoration: const InputDecoration(
+              hintText: 'Enter your 4-digit PIN',
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(null),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(pinController.text),
+              child: const Text('Submit'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (pin != null && mounted) {
+      final authProvider = Provider.of<AuthProvider>(context, listen: false);
+      final success = await authProvider.verifyPin(pin);
+
+      if (success && mounted) {
+        _showPrivateKeyDialog();
+      } else if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Incorrect PIN'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _showPrivateKeyDialog() async {
+    // Get the private key
+    String privateKey = "";
+    try {
+      // This would be your implementation of getPrivateKey
+      // For now, we'll use a placeholder
+      privateKey = await Provider.of<AgentProvider>(context, listen: false).getPrivateKey();
+    } catch (e) {
+      privateKey = "Error retrieving private key: $e";
+    }
+
+    if (!mounted) return;
+
+    // Show the private key dialog
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          title: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text('Your Private Key'),
+              IconButton(
+                icon: const Icon(Icons.close),
+                onPressed: () => Navigator.of(context).pop(),
+              ),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Warning: Never share your private key with anyone!',
+                style: TextStyle(
+                  color: Colors.red,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade100,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.grey.shade300),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        privateKey,
+                        style: const TextStyle(fontFamily: 'monospace'),
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.copy),
+                      onPressed: () {
+                        Clipboard.setData(ClipboardData(text: privateKey));
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Private key copied to clipboard'),
+                          ),
+                        );
+                      },
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Close'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final agentProvider = Provider.of<AgentProvider>(context);
@@ -57,94 +261,96 @@ class _SettingsScreenState extends State<SettingsScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Settings'),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () => Navigator.pop(context),
+        ),
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Agent Profile Section
-            if (agentProvider.hasAgent) ...[
-              Center(
-                child: Column(
-                  children: [
-                    Stack(
-                      children: [
-                        CircleAvatar(
-                          radius: 60,
-                          backgroundColor: Colors.grey.shade200,
-                          backgroundImage: _newImagePath != null
-                              ? FileImage(File(_newImagePath!))
-                              : agentProvider.agentImagePath != null
-                              ? FileImage(File(agentProvider.agentImagePath!))
-                              : null,
-                          child: (_newImagePath == null && agentProvider.agentImagePath == null)
-                              ? const Icon(Icons.person, size: 60, color: Colors.grey)
-                              : null,
-                        ),
-                        Positioned(
-                          bottom: 0,
-                          right: 0,
-                          child: InkWell(
-                            onTap: _pickImage,
-                            child: Container(
-                              padding: const EdgeInsets.all(8),
-                              decoration: const BoxDecoration(
-                                color: Colors.blue,
-                                shape: BoxShape.circle,
-                              ),
-                              child: const Icon(
-                                Icons.edit,
-                                color: Colors.white,
-                                size: 20,
-                              ),
+            // Agent Profile
+            Center(
+              child: Column(
+                children: [
+                  Stack(
+                    children: [
+                      CircleAvatar(
+                        radius: 60,
+                        backgroundColor: Colors.grey.shade200,
+                        backgroundImage: _newImagePath != null
+                            ? FileImage(File(_newImagePath!))
+                            : agentProvider.agentImagePath != null
+                            ? FileImage(File(agentProvider.agentImagePath!))
+                            : null,
+                        child: (_newImagePath == null && agentProvider.agentImagePath == null)
+                            ? const Icon(Icons.person, size: 60, color: Colors.grey)
+                            : null,
+                      ),
+                      Positioned(
+                        bottom: 0,
+                        right: 0,
+                        child: InkWell(
+                          onTap: _pickImage,
+                          child: Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: const BoxDecoration(
+                              color: Colors.blue,
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(
+                              Icons.edit,
+                              color: Colors.white,
+                              size: 20,
                             ),
                           ),
                         ),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
 
-                    // Agent Name with Edit Option
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        _isEditingName
-                            ? Expanded(
-                          child: TextField(
-                            controller: _nameController,
-                            decoration: const InputDecoration(
-                              labelText: 'Agent Name',
-                              border: OutlineInputBorder(),
-                            ),
-                            autofocus: true,
+                  // Agent Name with Edit Option
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      _isEditingName
+                          ? Expanded(
+                        child: TextField(
+                          controller: _nameController,
+                          decoration: const InputDecoration(
+                            labelText: 'Agent Name',
+                            border: OutlineInputBorder(),
                           ),
-                        )
-                            : Text(
-                          agentProvider.agentName ?? 'My Trading Agent',
-                          style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+                          autofocus: true,
                         ),
-                        IconButton(
-                          icon: Icon(_isEditingName ? Icons.check : Icons.edit),
-                          onPressed: () {
-                            if (_isEditingName) {
-                              // Save the name
-                              agentProvider.updateAgentName(_nameController.text);
-                            }
-                            setState(() {
-                              _isEditingName = !_isEditingName;
-                            });
-                          },
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
+                      )
+                          : Text(
+                        agentProvider.agentName ?? 'My Trading Agent',
+                        style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+                      ),
+                      IconButton(
+                        icon: Icon(_isEditingName ? Icons.check : Icons.edit),
+                        onPressed: () {
+                          if (_isEditingName) {
+                            // Save the name
+                            agentProvider.updateAgentName(_nameController.text);
+                          }
+                          setState(() {
+                            _isEditingName = !_isEditingName;
+                          });
+                        },
+                      ),
+                    ],
+                  ),
+                ],
               ),
-              const SizedBox(height: 32),
-            ],
+            ),
+            const SizedBox(height: 32),
 
-            // Private Key Section
+            // Private Key Section - Updated as requested
             const Text(
               'Private Key',
               style: TextStyle(
@@ -159,59 +365,36 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 borderRadius: BorderRadius.circular(8),
               ),
               padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              child: Row(
                 children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text('Show Private Key'),
-                      Switch(
-                        value: _showPrivateKey,
-                        onChanged: (value) {
-                          setState(() {
-                            _showPrivateKey = value;
-                          });
-                        },
-                      ),
-                    ],
-                  ),
-                  if (_showPrivateKey) ...[
-                    const SizedBox(height: 8),
-                    Container(
-                      padding: const EdgeInsets.all(12),
+                  // Non-editable input showing masked private key
+                  Expanded(
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
                       decoration: BoxDecoration(
-                        color: Colors.grey.shade200,
-                        borderRadius: BorderRadius.circular(8),
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(4),
+                        border: Border.all(color: Colors.grey.shade300),
                       ),
-                      child: Row(
-                        children: [
-
-                          IconButton(
-                            icon: const Icon(Icons.copy),
-                            onPressed: () {
-                              // Implement copy to clipboard
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text('Private key copied to clipboard')),
-                              );
-                            },
-                          ),
-                        ],
+                      child: const Text(
+                        'XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX',
+                        style: TextStyle(fontFamily: 'monospace'),
                       ),
                     ),
-                    const SizedBox(height: 8),
-                    const Text(
-                      'Warning: Never share your private key with anyone.',
-                      style: TextStyle(color: Colors.red, fontStyle: FontStyle.italic),
-                    ),
-                  ],
+                  ),
+                  // Eye icon to reveal
+                  IconButton(
+                    icon: const Icon(Icons.visibility),
+                    onPressed: _showAuthenticationDialog,
+                    tooltip: 'Show private key',
+                  ),
                 ],
               ),
             ),
 
             const SizedBox(height: 24),
 
-            // Whitelist Assets Toggle
+            // Security Settings
             const Text(
               'Security Settings',
               style: TextStyle(
@@ -249,7 +432,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       setState(() {
                         _whitelistAssets = value;
                       });
-                      // Save the setting to persistent storage
                     },
                   ),
                 ],
@@ -269,6 +451,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   }
 
                   // Save whitelist setting to persistent storage
+                  // You'd implement this part
 
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(content: Text('Settings saved')),
