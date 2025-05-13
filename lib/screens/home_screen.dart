@@ -228,8 +228,8 @@ class _HomeScreenState extends State<HomeScreen> {
                             const Text(
                               'USD',
                               style: TextStyle(
-                                fontSize: 16,
-                                color: Colors.grey,
+                                fontSize: 14,
+                                color: Colors.white,
                               ),
                             ),
                           ],

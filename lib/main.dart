@@ -26,18 +26,10 @@ class SolanaWalletApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      // title: 'Solana Wallet',
-      // routes: {
-      //   '/settings': (context) => const SettingsScreen(),
-      //   // other routes
-      // },
-      // theme: ThemeData(
-      //   primarySwatch: Colors.blue,
-      //   useMaterial3: true,
-      // ),
-      // home: const AuthCheckScreen(),
-      // debugShowCheckedModeBanner: false,
     title: 'PawPad',
+        routes: {
+          '/settings': (context) => const SettingsScreen(),
+        },
     theme: ThemeData(
     scaffoldBackgroundColor: const Color(0xFF000A19),
     fontFamily: 'TT Firs Neue',
@@ -58,7 +50,8 @@ class SolanaWalletApp extends StatelessWidget {
     ),
     ),
     ),
-    home: const HomeScreen(),
+    home: const AuthCheckScreen(),
+      debugShowCheckedModeBanner: false,
     );
   }
 }

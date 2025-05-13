@@ -262,7 +262,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       appBar: AppBar(
         title: const Text('Settings'),
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
+          icon: const Icon(Icons.arrow_back, color:Colors.white),
           onPressed: () => Navigator.pop(context),
         ),
       ),
@@ -329,10 +329,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       )
                           : Text(
                         agentProvider.agentName ?? 'My Trading Agent',
-                        style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+                        style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color:Colors.white),
                       ),
                       IconButton(
-                        icon: Icon(_isEditingName ? Icons.check : Icons.edit),
+                        icon: Icon(_isEditingName ? Icons.check : Icons.edit,  color: Colors.white60,  ),
                         onPressed: () {
                           if (_isEditingName) {
                             // Save the name
@@ -356,6 +356,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
+                color:Colors.white
               ),
             ),
             const SizedBox(height: 8),
@@ -384,7 +385,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
                   // Eye icon to reveal
                   IconButton(
-                    icon: const Icon(Icons.visibility),
+                    icon: const Icon(Icons.visibility ),
                     onPressed: _showAuthenticationDialog,
                     tooltip: 'Show private key',
                   ),
@@ -400,6 +401,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
+                color:Colors.white
               ),
             ),
             const SizedBox(height: 8),

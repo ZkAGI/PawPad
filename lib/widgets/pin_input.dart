@@ -4,12 +4,17 @@ import 'package:flutter/services.dart';
 class PinInput extends StatefulWidget {
   final Function(String) onCompleted;
   final TextEditingController controller;
+  final Color textColor;       // new parameter
+  final Color cursorColor;     // new parameter
 
   const PinInput({
     Key? key,
     required this.onCompleted,
     required this.controller,
-  }) : super(key: key);
+    this.textColor = Colors.black,
+    Color? cursorColor,
+  })  : cursorColor = cursorColor ?? textColor,
+        super(key: key);
 
   @override
   State<PinInput> createState() => _PinInputState();
@@ -23,12 +28,10 @@ class _PinInputState extends State<PinInput> {
   void initState() {
     super.initState();
 
-    // Focus the first node when the widget is built
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _focusNodes[0].requestFocus();
     });
 
-    // Set up listeners to move focus when a digit is entered
     for (int i = 0; i < 3; i++) {
       _controllers[i].addListener(() {
         if (_controllers[i].text.length == 1) {
@@ -37,10 +40,9 @@ class _PinInputState extends State<PinInput> {
       });
     }
 
-    // When the last digit is entered, call onCompleted
     _controllers[3].addListener(() {
       if (_controllers[3].text.length == 1) {
-        final pin = _controllers.map((controller) => controller.text).join();
+        final pin = _controllers.map((c) => c.text).join();
         if (pin.length == 4) {
           widget.controller.text = pin;
           widget.onCompleted(pin);
@@ -75,7 +77,7 @@ class _PinInputState extends State<PinInput> {
           mainAxisAlignment: MainAxisAlignment.center,
           children: List.generate(
             4,
-            (index) => Container(
+                (index) => Container(
               width: 60,
               margin: const EdgeInsets.symmetric(horizontal: 5),
               child: TextField(
@@ -85,6 +87,11 @@ class _PinInputState extends State<PinInput> {
                 textAlign: TextAlign.center,
                 maxLength: 1,
                 obscureText: true,
+                style: TextStyle(
+                  color: widget.textColor,
+                  fontSize: 24,
+                ),
+                cursorColor: widget.cursorColor,
                 decoration: const InputDecoration(
                   counterText: '',
                   border: OutlineInputBorder(),
@@ -93,7 +100,6 @@ class _PinInputState extends State<PinInput> {
                   FilteringTextInputFormatter.digitsOnly,
                 ],
                 onChanged: (value) {
-                  // Handle backspace
                   if (value.isEmpty && index > 0) {
                     _focusNodes[index - 1].requestFocus();
                   }

@@ -105,12 +105,14 @@ class _PinLoginScreenState extends State<PinLoginScreen> {
               const Text(
                 'Enter your 4-digit PIN to access your wallet',
                 textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 18),
+                style: TextStyle(fontSize: 18,  color:Colors.white),
               ),
               const SizedBox(height: 30),
               PinInput(
                 onCompleted: _onPinComplete,
                 controller: _pinController,
+                textColor: Colors.white,
+                cursorColor: Colors.white, // optional
               ),
               if (_errorMessage != null)
                 Padding(
