@@ -86,4 +86,73 @@ class AgentProvider extends ChangeNotifier {
       debugPrint('Error updating agent image: $e');
     }
   }
+
+  // Add this method to the AgentProvider class
+  Future<void> getOrCreateAgent({
+    required String name,
+    String? imagePath,
+    required bool bitcoinBuyAndHold,
+    required bool autonomousTrading,
+  }) async {
+    try {
+      _isLoading = true;
+      notifyListeners();
+
+      // Check if agent already exists
+      final existingAgent = await _secureStorage.read(key: _agentNameKey);
+
+      if (existingAgent != null) {
+        // Agent exists, update it
+        await _secureStorage.write(key: _agentNameKey, value: name);
+        _agentName = name;
+
+        if (imagePath != null) {
+          await _secureStorage.write(key: _agentImagePathKey, value: imagePath);
+          _agentImagePath = imagePath;
+        }
+
+        // Store agent settings
+        await _secureStorage.write(key: 'bitcoin_buy_and_hold', value: bitcoinBuyAndHold.toString());
+        await _secureStorage.write(key: 'autonomous_trading', value: autonomousTrading.toString());
+      } else {
+        // Create new agent
+        await _secureStorage.write(key: _agentNameKey, value: name);
+        _agentName = name;
+
+        if (imagePath != null) {
+          await _secureStorage.write(key: _agentImagePathKey, value: imagePath);
+          _agentImagePath = imagePath;
+        }
+
+        // Store agent settings
+        await _secureStorage.write(key: 'bitcoin_buy_and_hold', value: bitcoinBuyAndHold.toString());
+        await _secureStorage.write(key: 'autonomous_trading', value: autonomousTrading.toString());
+
+        // Initialize agent on blockchain (mock for now)
+        // In the future, you might want to integrate with Solana here
+        // to create an actual on-chain agent entity
+        debugPrint('Creating agent on blockchain...');
+        await Future.delayed(const Duration(milliseconds: 500)); // Simulate blockchain interaction
+      }
+
+      _isLoading = false;
+      notifyListeners();
+    } catch (e) {
+      debugPrint('Error in getOrCreateAgent: $e');
+      _isLoading = false;
+      notifyListeners();
+      rethrow; // Rethrow so we can catch it in the UI
+    }
+  }
+
+// Add these getters to retrieve agent settings
+  Future<bool> getBitcoinBuyAndHold() async {
+    final value = await _secureStorage.read(key: 'bitcoin_buy_and_hold');
+    return value?.toLowerCase() == 'true';
+  }
+
+  Future<bool> getAutonomousTrading() async {
+    final value = await _secureStorage.read(key: 'autonomous_trading');
+    return value?.toLowerCase() == 'true';
+  }
 }
