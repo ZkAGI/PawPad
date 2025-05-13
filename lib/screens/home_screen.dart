@@ -357,6 +357,7 @@ class _HomeScreenState extends State<HomeScreen> {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
+      backgroundColor: const Color(0xFF1F2641),
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
@@ -416,7 +417,7 @@ class _CreateAgentFormState extends State<CreateAgentForm> {
           children: [
             const Text(
               'Create Trading Agent',
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white,  ),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 24),
@@ -462,6 +463,7 @@ class _CreateAgentFormState extends State<CreateAgentForm> {
             // Agent name field
             TextFormField(
               controller: _nameController,
+              style: const TextStyle(color: Colors.white),
               decoration: const InputDecoration(
                 labelText: 'Agent Name',
                 border: OutlineInputBorder(),
@@ -477,8 +479,8 @@ class _CreateAgentFormState extends State<CreateAgentForm> {
 
             // Bitcoin Buy & Hold toggle
             SwitchListTile(
-              title: const Text('Bitcoin Buy & Hold'),
-              subtitle: const Text('Enable long-term Bitcoin investment strategy'),
+              title: const Text('Bitcoin Buy & Hold', style: TextStyle(color: Colors.white)),
+              subtitle: const Text('Enable long-term Bitcoin investment strategy',style: TextStyle(color: Colors.white54)),
               value: _bitcoinBuyAndHold,
               onChanged: (value) {
                 setState(() {
@@ -489,8 +491,8 @@ class _CreateAgentFormState extends State<CreateAgentForm> {
 
             // Autonomous Trading toggle
             SwitchListTile(
-              title: const Text('Autonomous Trading'),
-              subtitle: const Text('Allow agent to trade automatically based on market conditions'),
+              title: const Text('Autonomous Trading', style: TextStyle(color: Colors.white)),
+              subtitle: const Text('Allow agent to trade automatically based on market conditions',style: TextStyle(color: Colors.white54)),
               value: _autonomousTrading,
               onChanged: (value) {
                 setState(() {
