@@ -29,6 +29,9 @@ class _HomeScreenState extends State<HomeScreen> {
     _loadAgents();
     // Initialize with first agent and fetch balance
     _initializeSelectedAgent();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkDailyTradingSignal();
+    });
   }
 
   // Add this method to your _HomeScreenState class
@@ -48,6 +51,116 @@ class _HomeScreenState extends State<HomeScreen> {
 
     // If there are no available agents, return null
     return null;
+  }
+
+  // Add this method to your _HomeScreenState class
+  void _showInsufficientBalanceDialog(BuildContext context, String signal) {
+    showDialog(
+      context: context,
+      barrierDismissible: false, // User must tap button to close dialog
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Row(
+            children: [
+              const Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 28),
+              const SizedBox(width: 10),
+              const Text('Action Required', style: TextStyle(fontWeight: FontWeight.bold)),
+            ],
+          ),
+          content: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'Your trading agent received a $signal signal but couldn\'t perform the transaction.',
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                ),
+                const SizedBox(height: 12),
+                const Text(
+                  'Your wallet currently has insufficient balance to execute the transaction. To enable autonomous trading:',
+                ),
+                const SizedBox(height: 12),
+                const Padding(
+                  padding: EdgeInsets.only(left: 8.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('• Load SOL into your wallet'),
+                      Text('• Automated trading will resume within 24 hours'),
+                      Text('• Keep sufficient balance for continuous operation'),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+                const Text(
+                  'Your agent will continue monitoring the market and will execute transactions automatically once funds are available.',
+                  style: TextStyle(fontStyle: FontStyle.italic),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+              child: const Text('Dismiss'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                // You could navigate to a "Add Funds" screen here
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Fund addition feature coming soon!')),
+                );
+              },
+              child: const Text('Add Funds'),
+            ),
+          ],
+          backgroundColor: Colors.white,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        );
+      },
+    );
+  }
+
+  Future<void> _checkDailyTradingSignal() async {
+    final agentProvider = Provider.of<AgentProvider>(context, listen: false);
+
+    // Only check if we have an agent
+    if (!agentProvider.hasAgent) return;
+
+    final result = await agentProvider.checkDailyTradingSignal();
+
+    // If a result was checked and there's a message, show it to the user
+    if (result['checked'] == true && result['message'] != null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(result['message']),
+            duration: const Duration(seconds: 5),
+            action: result['signal'] == 'buy' && result['action'] == 'none'
+                ? SnackBarAction(
+              label: 'Add Funds',
+              onPressed: () {
+                // Navigate to a screen where the user can add funds
+                // For now just show another message
+                ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Fund addition feature coming soon!'))
+                );
+              },
+            )
+                : null,
+          ),
+        );
+      }
+    }
+
+    // If a buy action was performed, refresh the balance
+    if (result['action'] == 'buy') {
+      _refreshBalance();
+    }
   }
 
   Future<void> _loadAgents() async {
@@ -440,6 +553,9 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 }
+
+class _checkDailyTradingSignal {
+}
 // Create Agent Form Modal
 class CreateAgentForm extends StatefulWidget {
   const CreateAgentForm({Key? key}) : super(key: key);
@@ -478,6 +594,8 @@ class _CreateAgentFormState extends State<CreateAgentForm> {
       setState(() {
         _isLoading = true;
       });
+
+      bool needsBalanceWarning = false;
 
       try {
         print('-------- AGENT CREATION PROCESS STARTED --------');
@@ -528,19 +646,36 @@ class _CreateAgentFormState extends State<CreateAgentForm> {
 
               print('Trading signal received: $signal');
 
+              final currentBalance = await agentProvider.getBalance();
+
               // Add action to activity based on signal
               if (signal.toLowerCase() == 'buy') {
-                activity.add({
-                  'action': 'buy',
-                  'ts': timestamp,
-                  // Add solscan link if available in future
-                });
+                if (currentBalance <= 0) {
+                  // Cannot perform buy action due to insufficient balance
+                  print('Cannot perform buy action: Insufficient balance');
+                  activity.add({
+                    'action': 'buy_failed',
+                    'ts': timestamp,
+                    'note': 'Insufficient balance to perform swap action'
+                  });
+
+                  needsBalanceWarning = true;
+                  // Show a notification that will be displayed after agent creation
+                  print('Agent created with signal: BUY, but swap action could not be performed due to insufficient balance. Please load some SOL to enable transactions.');
+                }else {
+                  activity.add({
+                    'action': 'buy',
+                    'ts': timestamp,
+                    // Add solscan link if available in future
+                  });
+                }
               } else {
                 activity.add({
                   'action': 'hold',
                   'ts': timestamp,
                 });
               }
+
             } else {
               print('Failed to get prediction - using default "hold" action');
               activity.add({
@@ -611,6 +746,18 @@ class _CreateAgentFormState extends State<CreateAgentForm> {
 
           // Close the modal
           Navigator.pop(context, _nameController.text);
+
+          if (needsBalanceWarning && context.mounted) {
+            // Delay slightly to allow the UI to update
+            Future.delayed(const Duration(milliseconds: 500), () {
+              if (context.mounted) {
+                // This requires adding the dialog function to a location visible to the form
+                // Pass the parent context to access the _showInsufficientBalanceDialog method
+                _showInsufficientBalanceDialogAfterCreation(context, 'BUY');
+              }
+            });
+          }
+
         }
       } catch (e) {
         print('Error creating agent: $e');
@@ -751,4 +898,76 @@ class _CreateAgentFormState extends State<CreateAgentForm> {
       ),
     );
   }
+}
+
+// Add this method to _CreateAgentFormState
+void _showInsufficientBalanceDialogAfterCreation(BuildContext context, String signal) {
+  showDialog(
+    context: context,
+    barrierDismissible: false,
+    builder: (BuildContext context) {
+      return AlertDialog(
+        title: Row(
+          children: [
+            const Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 28),
+            const SizedBox(width: 10),
+            const Text('Action Required', style: TextStyle(fontWeight: FontWeight.bold)),
+          ],
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'Your trading agent received a $signal signal but couldn\'t perform the transaction.',
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+              ),
+              const SizedBox(height: 12),
+              const Text(
+                'Your wallet currently has insufficient balance to execute the transaction. To enable autonomous trading:',
+              ),
+              const SizedBox(height: 12),
+              const Padding(
+                padding: EdgeInsets.only(left: 8.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('• Load SOL into your wallet'),
+                    Text('• Automated trading will resume within 24 hours'),
+                    Text('• Keep sufficient balance for continuous operation'),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                'Your agent will continue monitoring the market and will execute transactions automatically once funds are available.',
+                style: TextStyle(fontStyle: FontStyle.italic),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+            },
+            child: const Text('Dismiss'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+              // You could navigate to a "Add Funds" screen here
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Fund addition feature coming soon!')),
+              );
+            },
+            child: const Text('Add Funds'),
+          ),
+        ],
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      );
+    },
+  );
 }
