@@ -82,7 +82,7 @@ packages:
     source: hosted
     version: "0.3.4+2"
   crypto:
-    dependency: transitive
+    dependency: "direct main"
     description:
       name: crypto
       sha256: "1e445881f28f22d6140f181e07737b22f1e099a5e1ff94b0af2f9e4a463f4855"
@@ -113,6 +113,22 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "3.2.1"
+  device_info_plus:
+    dependency: "direct main"
+    description:
+      name: device_info_plus
+      sha256: "77f757b789ff68e4eaf9c56d1752309bd9f7ad557cb105b938a7f8eb89e59110"
+      url: "https://pub.dev"
+    source: hosted
+    version: "9.1.2"
+  device_info_plus_platform_interface:
+    dependency: transitive
+    description:
+      name: device_info_plus_platform_interface
+      sha256: "0b04e02b30791224b31969eb1b50d723498f402971bff3630bca2ba839bd1ed2"
+      url: "https://pub.dev"
+    source: hosted
+    version: "7.0.2"
   ed25519_hd_key:
     dependency: transitive
     description:
@@ -797,6 +813,22 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "3.0.3"
+  win32:
+    dependency: transitive
+    description:
+      name: win32
+      sha256: "329edf97fdd893e0f1e3b9e88d6a0e627128cc17cc316a8d67fda8f1451178ba"
+      url: "https://pub.dev"
+    source: hosted
+    version: "5.13.0"
+  win32_registry:
+    dependency: transitive
+    description:
+      name: win32_registry
+      sha256: "21ec76dfc731550fd3e2ce7a33a9ea90b828fdf19a5c3bcf556fa992cfa99852"
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.1.5"
   xdg_directories:
     dependency: transitive
     description:

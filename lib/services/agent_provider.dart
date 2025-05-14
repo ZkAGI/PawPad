@@ -4,7 +4,9 @@ import 'package:solana/solana.dart';
 import 'package:bip39/bip39.dart' as bip39;
 import 'dart:convert';
 import 'dart:typed_data';
-import 'dart:math'; // For generating random data if needed
+import 'dart:math';
+
+import 'package:solana_hackathon_2025/services/wallet_storage_service.dart'; // For generating random data if needed
 
 class AgentProvider extends ChangeNotifier {
   final FlutterSecureStorage _secureStorage = const FlutterSecureStorage();
@@ -107,16 +109,41 @@ class AgentProvider extends ChangeNotifier {
   }
 
   // Initialize provider
+  // Future<void> initialize() async {
+  //   try {
+  //     _isLoading = true;
+  //     notifyListeners();
+  //
+  //     _agentName = await _secureStorage.read(key: _agentNameKey);
+  //     _agentImagePath = await _secureStorage.read(key: _agentImagePathKey);
+  //
+  //     // Load wallet addresses
+  //     await _loadAgentWalletAddresses();
+  //
+  //     _isLoading = false;
+  //     notifyListeners();
+  //   } catch (e) {
+  //     debugPrint('Error initializing agent provider: $e');
+  //     _isLoading = false;
+  //     notifyListeners();
+  //   }
+  // }
   Future<void> initialize() async {
     try {
       _isLoading = true;
       notifyListeners();
 
+      // Get stored agent name and image path
       _agentName = await _secureStorage.read(key: _agentNameKey);
       _agentImagePath = await _secureStorage.read(key: _agentImagePathKey);
 
-      // Load wallet addresses
-      await _loadAgentWalletAddresses();
+      // Get all wallets from storage service
+      final storedWallets = await WalletStorageService.getWalletList();
+
+      // Populate the wallet addresses map
+      for (var wallet in storedWallets) {
+        _agentWalletAddresses[wallet['name']] = wallet['address'];
+      }
 
       _isLoading = false;
       notifyListeners();
@@ -126,7 +153,7 @@ class AgentProvider extends ChangeNotifier {
       notifyListeners();
     }
   }
-
+  // Get or create agent with real wallet address
   // Get or create agent with real wallet address
   Future<void> getOrCreateAgent({
     required String name,
@@ -161,6 +188,17 @@ class AgentProvider extends ChangeNotifier {
       // Update in-memory wallet address map
       _agentWalletAddresses[name] = walletAddress;
 
+      // IMPORTANT ADDITION - Store the wallet in WalletStorageService
+      final mnemonic = await _secureStorage.read(key: 'mnemonic');
+      if (mnemonic != null) {
+        await WalletStorageService.storeWallet(
+          agentName: name,
+          mnemonic: mnemonic,
+          walletAddress: walletAddress,
+        );
+        debugPrint('Stored wallet in WalletStorageService for $name: $walletAddress');
+      }
+
       debugPrint('Created real wallet address for $name: $walletAddress');
 
       _isLoading = false;
@@ -172,6 +210,50 @@ class AgentProvider extends ChangeNotifier {
       rethrow;
     }
   }
+  // Future<void> getOrCreateAgent({
+  //   required String name,
+  //   String? imagePath,
+  //   required bool bitcoinBuyAndHold,
+  //   required bool autonomousTrading,
+  // }) async {
+  //   try {
+  //     _isLoading = true;
+  //     notifyListeners();
+  //
+  //     // Store agent settings
+  //     await _secureStorage.write(key: _agentNameKey, value: name);
+  //     _agentName = name;
+  //
+  //     if (imagePath != null) {
+  //       await _secureStorage.write(key: _agentImagePathKey, value: imagePath);
+  //       _agentImagePath = imagePath;
+  //     }
+  //
+  //     // Store agent preferences
+  //     await _secureStorage.write(key: 'bitcoin_buy_and_hold', value: bitcoinBuyAndHold.toString());
+  //     await _secureStorage.write(key: 'autonomous_trading', value: autonomousTrading.toString());
+  //
+  //     // Get or create a real wallet and store its address
+  //     final wallet = await getOrCreateWallet();
+  //     final walletAddress = wallet.address;
+  //
+  //     // Store the wallet address
+  //     await _secureStorage.write(key: '${name}_wallet_address', value: walletAddress);
+  //
+  //     // Update in-memory wallet address map
+  //     _agentWalletAddresses[name] = walletAddress;
+  //
+  //     debugPrint('Created real wallet address for $name: $walletAddress');
+  //
+  //     _isLoading = false;
+  //     notifyListeners();
+  //   } catch (e) {
+  //     debugPrint('Error in getOrCreateAgent: $e');
+  //     _isLoading = false;
+  //     notifyListeners();
+  //     rethrow;
+  //   }
+  // }
 
   // Load agent wallet addresses
   Future<void> _loadAgentWalletAddresses() async {
@@ -252,6 +334,60 @@ class AgentProvider extends ChangeNotifier {
       notifyListeners();
     } catch (e) {
       debugPrint('Error updating agent image: $e');
+    }
+  }
+
+  // Add this method to your AgentProvider class
+
+  Future<void> loadStoredWallets() async {
+    try {
+      // Get the wallet list from WalletStorageService
+      final walletList = await WalletStorageService.getWalletList();
+
+      // Process each stored wallet
+      for (var wallet in walletList) {
+        // Add to in-memory map
+        final name = wallet['name'] as String;
+        final address = wallet['address'] as String;
+        _agentWalletAddresses[name] = address;
+
+        // If we don't have an agent selected yet, use the first one
+        if (_agentName == null) {
+          _agentName = name;
+          await _secureStorage.write(key: _agentNameKey, value: name);
+        }
+      }
+
+      // Notify listeners if any wallets were loaded
+      if (walletList.isNotEmpty) {
+        notifyListeners();
+      }
+
+      debugPrint('Loaded ${walletList.length} wallets from storage');
+    } catch (e) {
+      debugPrint('Error loading wallets from storage: $e');
+    }
+  }
+
+  // Add to your AgentProvider class
+  Future<void> switchToAgent(String agentName) async {
+    try {
+      // First check if this is a valid agent
+      if (!_agentWalletAddresses.containsKey(agentName)) {
+        throw Exception('Agent not found: $agentName');
+      }
+
+      // Set the new agent as current
+      _agentName = agentName;
+      await _secureStorage.write(key: _agentNameKey, value: agentName);
+
+      // Notify listeners of the change
+      notifyListeners();
+
+      debugPrint('Switched to agent: $agentName');
+    } catch (e) {
+      debugPrint('Error switching agent: $e');
+      throw Exception('Failed to switch agent: $e');
     }
   }
 }

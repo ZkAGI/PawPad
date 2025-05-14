@@ -7,6 +7,7 @@ import '../services/auth_provider.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import '../services/wallet_storage_service.dart';
 import '../widgets/gradient_card.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -20,12 +21,56 @@ class _HomeScreenState extends State<HomeScreen> {
   String? selectedAgentName;
   bool _isLoadingBalance = false;
   double _currentBalance = 0.0;
+  List<String> _availableAgents = [];
 
   @override
   void initState() {
     super.initState();
+    _loadAgents();
     // Initialize with first agent and fetch balance
     _initializeSelectedAgent();
+  }
+
+  // Add this method to your _HomeScreenState class
+  String? _getValidDropdownValue(AgentProvider agentProvider) {
+    // First try to use the selected name or the provider's agent name
+    String? value = selectedAgentName ?? agentProvider.agentName;
+
+    // Check if the value exists in the available agents list
+    if (value != null && _availableAgents.contains(value)) {
+      return value;
+    }
+
+    // If not, use the first available agent if any exist
+    if (_availableAgents.isNotEmpty) {
+      return _availableAgents.first;
+    }
+
+    // If there are no available agents, return null
+    return null;
+  }
+
+  Future<void> _loadAgents() async {
+    print('Loading agents from storage...');
+    final agentProvider = Provider.of<AgentProvider>(context, listen: false);
+
+    try {
+      // Clear and reload all wallets
+      await agentProvider.loadStoredWallets();
+
+      // Get a fresh list of wallet agents
+      final walletList = await WalletStorageService.getWalletList();
+      print('Wallet list from storage: $walletList');
+
+      // Update the UI with fresh data
+      setState(() {
+        _availableAgents =
+            walletList.map((wallet) => wallet['name'] as String).toList();
+        print('Available agents updated to: $_availableAgents');
+      });
+    } catch (e) {
+      print('Error loading agents: $e');
+    }
   }
 
   Future<void> _initializeSelectedAgent() async {
@@ -45,7 +90,8 @@ class _HomeScreenState extends State<HomeScreen> {
 
     try {
       // Always use the current agent from the provider
-      final balance = await agentProvider.getAgentBalance(agentProvider.agentName!);
+      final balance = await agentProvider.getAgentBalance(
+          agentProvider.agentName!);
 
       setState(() {
         _currentBalance = balance;
@@ -61,7 +107,8 @@ class _HomeScreenState extends State<HomeScreen> {
 
   void _copyWalletAddress(BuildContext context, AgentProvider agentProvider) {
     // Always use the current agent from the provider
-    final address = agentProvider.getAgentWalletAddress(agentProvider.agentName);
+    final address = agentProvider.getAgentWalletAddress(
+        agentProvider.agentName);
 
     if (address != null && address.isNotEmpty) {
       Clipboard.setData(ClipboardData(text: address));
@@ -86,18 +133,16 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     final agentProvider = Provider.of<AgentProvider>(context);
-    List<String> availableAgents = [];
-    if (agentProvider.agentName != null) {
-      availableAgents.add(agentProvider.agentName!);
-      // Add any other real agents here when you have multiple agent support
-    }
+
+    print('Agent provider current agent: ${agentProvider.agentName}');
+    print('Available agents from _availableAgents: $_availableAgents');
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('PawPad'),
         actions: [
           // Agent selector with dropdown and icon
-          if (agentProvider.hasAgent || availableAgents.isNotEmpty)
+          if (_availableAgents.isNotEmpty)
             Row(
               children: [
                 // Agent status icon
@@ -111,7 +156,8 @@ class _HomeScreenState extends State<HomeScreen> {
                         color: Colors.orange.shade100,
                         shape: BoxShape.circle,
                       ),
-                      child: Icon(Icons.auto_awesome, size: 16, color: Colors.orange.shade700),
+                      child: Icon(Icons.auto_awesome, size: 16,
+                          color: Colors.orange.shade700),
                     ),
                     Positioned(
                       right: 4,
@@ -130,37 +176,40 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
 
                 // Agent dropdown
-                DropdownButton<String>(
-                  // Always use the agent name if available, even if selectedAgentName is null
-                  value: agentProvider.agentName ?? selectedAgentName,
+                // In HomeScreen build method, replace the dropdown section:
 
-                  // Remove the hint since we'll always have a value
-                  // hint: const Text('Select Agent'),  // Remove this line
+// Agent dropdown
+                // Inside your build method, modify the DropdownButton:
+                DropdownButton<String>(
+                  // Make sure the value exists in the items list
+                  value: _getValidDropdownValue(agentProvider),
                   underline: Container(),
-                  dropdownColor: const Color(0xFF000A19),                // dropdown’s background
-                  iconEnabledColor: Colors.white,                         // the arrow
+                  dropdownColor: const Color(0xFF000A19),
+                  iconEnabledColor: Colors.white,
                   style: const TextStyle(color: Colors.white, fontSize: 14),
                   onChanged: (String? newValue) {
                     if (newValue != null) {
+                      print('Selected new agent: $newValue');
                       setState(() {
                         selectedAgentName = newValue;
                       });
+                      agentProvider.switchToAgent(newValue);
                       _refreshBalance();
                     }
                   },
-                  items: availableAgents
-                      .map<DropdownMenuItem<String>>((String value) {
+                  items: _availableAgents.map<DropdownMenuItem<String>>((String value) {
+                    print('Adding dropdown item: $value');
                     return DropdownMenuItem<String>(
                       value: value,
                       child: Text(value, style: const TextStyle(fontSize: 14)),
                     );
                   }).toList(),
-                ),
+                )
               ],
             ),
 
           // Copy wallet address button
-          if (agentProvider.hasAgent || availableAgents.isNotEmpty)
+          if (agentProvider.hasAgent)
             IconButton(
               icon: const Icon(Icons.copy),
               color: Colors.white,
@@ -188,56 +237,57 @@ class _HomeScreenState extends State<HomeScreen> {
                 padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
                 child: Card(
                   elevation: 2,
-                  child:gradientCard(
-                  child: Padding(
-                    padding: const EdgeInsets.all(16.0),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            const Text(
-                              'Balance',
-                              style: TextStyle(
-                                fontSize: 30,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.white,
+                  child: gradientCard(
+                    child: Padding(
+                      padding: const EdgeInsets.all(16.0),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              const Text(
+                                'Balance',
+                                style: TextStyle(
+                                  fontSize: 30,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white,
+                                ),
                               ),
-                            ),
-                            IconButton(
-                              icon: const Icon(Icons.refresh, size: 20),
-                              onPressed: _refreshBalance,
-                              tooltip: 'Refresh balance',
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 8),
-                        _isLoadingBalance
-                            ? const Center(child: CircularProgressIndicator(strokeWidth: 2))
-                            : Row(
-                          children: [
-                            Text(
-                              '\$ ${_currentBalance.toStringAsFixed(2)}',
-                              style: const TextStyle(
-                                fontSize: 28,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.white,
+                              IconButton(
+                                icon: const Icon(Icons.refresh, size: 20),
+                                onPressed: _refreshBalance,
+                                tooltip: 'Refresh balance',
                               ),
-                            ),
-                            const SizedBox(width: 8),
-                            const Text(
-                              'USD',
-                              style: TextStyle(
-                                fontSize: 14,
-                                color: Colors.white,
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          _isLoadingBalance
+                              ? const Center(child: CircularProgressIndicator(
+                              strokeWidth: 2))
+                              : Row(
+                            children: [
+                              Text(
+                                '\$ ${_currentBalance.toStringAsFixed(2)}',
+                                style: const TextStyle(
+                                  fontSize: 28,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white,
+                                ),
                               ),
-                            ),
-                          ],
-                        ),
-                      ],
+                              const SizedBox(width: 8),
+                              const Text(
+                                'USD',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
                   ),
                 ),
               ),
@@ -279,39 +329,40 @@ class _HomeScreenState extends State<HomeScreen> {
     // Existing code...
     return Container(
       margin: const EdgeInsets.all(16.0),
-      child:gradientCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'Create Your Trading Agent Today',
-            style: TextStyle(
-              fontSize: 24,
-              fontWeight: FontWeight.bold,
-              color: Colors.white
+      child: gradientCard(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Create Your Trading Agent Today',
+              style: TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white
+              ),
             ),
-          ),
-          const SizedBox(height: 8),
-          const Text(
-            'Get started with automated trading on Solana',
-            style: TextStyle(
-              fontSize: 14,
-              color: Colors.white
+            const SizedBox(height: 8),
+            const Text(
+              'Get started with automated trading on Solana',
+              style: TextStyle(
+                  fontSize: 14,
+                  color: Colors.white
+              ),
             ),
-          ),
-          const SizedBox(height: 16),
-          ElevatedButton(
-            onPressed: () => _showCreateAgentModal(context),
-            child: const Text('Create Agent'),
-          ),
-        ],
-      ),
+            const SizedBox(height: 16),
+            ElevatedButton(
+              onPressed: () => _showCreateAgentModal(context),
+              child: const Text('Create Agent'),
+            ),
+          ],
+        ),
       ),
     );
   }
 
   // Trending agents list - no changes needed
-  Widget _buildTrendingAgentsList(BuildContext context, AgentProvider agentProvider) {
+  Widget _buildTrendingAgentsList(BuildContext context,
+      AgentProvider agentProvider) {
     // Existing code...
     return SizedBox(
       height: 150,
@@ -322,29 +373,30 @@ class _HomeScreenState extends State<HomeScreen> {
           final agent = agentProvider.trendingAgents[index];
           return Card(
             margin: const EdgeInsets.only(right: 12),
-            child:gradientCard(
-            child: Container(
-              width: 120,
-              padding: const EdgeInsets.all(8),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  CircleAvatar(
-                    radius: 30,
-                    backgroundColor: Colors.grey.shade200,
-                    child: const Icon(Icons.person, size: 30, color: Colors.grey),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    agent['name'] ?? 'Agent',
-                    style: const TextStyle(fontWeight: FontWeight.bold),
-                    textAlign: TextAlign.center,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ],
+            child: gradientCard(
+              child: Container(
+                width: 120,
+                padding: const EdgeInsets.all(8),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    CircleAvatar(
+                      radius: 30,
+                      backgroundColor: Colors.grey.shade200,
+                      child: const Icon(
+                          Icons.person, size: 30, color: Colors.grey),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      agent['name'] ?? 'Agent',
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                      textAlign: TextAlign.center,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
               ),
-            ),
             ),
           );
         },
@@ -353,9 +405,9 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   // Modal for creating a new agent - no changes needed
+// Inside _HomeScreenState class
   void _showCreateAgentModal(BuildContext context) {
-    // Existing code...
-    showModalBottomSheet(
+    showModalBottomSheet<String>(
       context: context,
       isScrollControlled: true,
       backgroundColor: const Color(0xFF1F2641),
@@ -363,10 +415,31 @@ class _HomeScreenState extends State<HomeScreen> {
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (context) => const CreateAgentForm(),
-    );
+    ).then((newAgentName) {
+      // If we received a new agent name back
+      if (newAgentName != null && newAgentName.isNotEmpty) {
+        print('New agent created: $newAgentName - refreshing home screen');
+
+        // Reload agents list from storage
+        _loadAgents().then((_) {
+          // Force UI update and select the new agent
+          setState(() {
+            selectedAgentName = newAgentName;
+            print('Set selectedAgentName to: $newAgentName');
+          });
+
+          // Switch to the new agent in the provider
+          final agentProvider = Provider.of<AgentProvider>(
+              context, listen: false);
+          agentProvider.switchToAgent(newAgentName).then((_) {
+            // Refresh the balance for the new agent
+            _refreshBalance();
+          });
+        });
+      }
+    });
   }
 }
-
 // Create Agent Form Modal
 class CreateAgentForm extends StatefulWidget {
   const CreateAgentForm({Key? key}) : super(key: key);
@@ -537,7 +610,7 @@ class _CreateAgentFormState extends State<CreateAgentForm> {
           );
 
           // Close the modal
-          Navigator.pop(context);
+          Navigator.pop(context, _nameController.text);
         }
       } catch (e) {
         print('Error creating agent: $e');
@@ -561,91 +634,6 @@ class _CreateAgentFormState extends State<CreateAgentForm> {
       }
     }
   }
-
-  // Future<void> _createAgentAndRecord() async {
-  //   if (_formKey.currentState!.validate()) {
-  //     setState(() {
-  //       _isLoading = true;
-  //     });
-  //
-  //     try {
-  //
-  //       // Step 1: Create the agent in the provider first
-  //       final agentProvider = Provider.of<AgentProvider>(context, listen: false);
-  //       await agentProvider.getOrCreateAgent(
-  //         name: _nameController.text,
-  //         imagePath: _imagePath,
-  //         bitcoinBuyAndHold: _bitcoinBuyAndHold,
-  //         autonomousTrading: _autonomousTrading,
-  //       );
-  //
-  //       // Step 2: Get the wallet address from the agent provider
-  //       final walletAddress = agentProvider.getAgentWalletAddress(_nameController.text);
-  //       print('Wallet address retrieved: $walletAddress');
-  //
-  //       if (walletAddress == null) {
-  //         throw Exception('Failed to get wallet address for agent');
-  //       }
-  //
-  //       // Step 3: Prepare API request data
-  //       final requestData = {
-  //         'ticker': _nameController.text,
-  //         'wallet_address': walletAddress,
-  //         'isFutureAndOptions': _autonomousTrading,
-  //         'isBuyAndHold': _bitcoinBuyAndHold,
-  //         'activity': [],
-  //       };
-  //
-  //       // Step 4: Send API request
-  //       final response = await http.post(
-  //         Uri.parse('https://zynapse.zkagi.ai/record_agent'),
-  //         headers: {
-  //           'Content-Type': 'application/json',
-  //           'api-key': 'zk-123321',
-  //         },
-  //         body: jsonEncode(requestData),
-  //       );
-  //
-  //       // Step 5: Handle API response;
-  //       if (response.statusCode != 200) {
-  //         throw Exception('Failed to record agent: ${response.body}');
-  //       }
-  //
-  //       if (context.mounted) {
-  //         // Show success message
-  //         ScaffoldMessenger.of(context).showSnackBar(
-  //           const SnackBar(
-  //             content: Text('Agent created and registered successfully!'),
-  //             backgroundColor: Colors.green,
-  //             behavior: SnackBarBehavior.floating,
-  //           ),
-  //         );
-  //
-  //         // Close the modal
-  //         Navigator.pop(context);
-  //       }
-  //     } catch (e) {
-  //       print('Error details: $e');
-  //
-  //       // Show error toast
-  //       if (context.mounted) {
-  //         ScaffoldMessenger.of(context).showSnackBar(
-  //           SnackBar(
-  //             content: Text('Error creating agent: $e'),
-  //             backgroundColor: Colors.red,
-  //             behavior: SnackBarBehavior.floating,
-  //           ),
-  //         );
-  //       }
-  //     } finally {
-  //       if (mounted) {
-  //         setState(() {
-  //           _isLoading = false;
-  //         });
-  //       }
-  //     }
-  //   }
-  // }
 
   @override
   Widget build(BuildContext context) {

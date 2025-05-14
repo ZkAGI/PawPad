@@ -81,12 +81,14 @@ class _PinSetupScreenState extends State<PinSetupScreen> {
                     ? 'Please confirm your 4-digit PIN'
                     : 'Create a 4-digit PIN to secure your wallet',
                 textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.titleLarge,
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(color: Colors.white),
               ),
               const SizedBox(height: 30),
               PinInput(
                 onCompleted: _onPinComplete,
                 controller: _isPinConfirmation ? _confirmPinController : _pinController,
+                textColor: Colors.white,
+                cursorColor: Colors.white,
               ),
               if (_errorMessage != null)
                 Padding(
