@@ -5,7 +5,8 @@ import 'dart:io';
 import '../services/agent_provider.dart';
 import '../services/auth_provider.dart';
 import 'package:image_picker/image_picker.dart';
-
+import 'dart:convert';
+import 'package:http/http.dart' as http;
 import '../widgets/gradient_card.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -400,6 +401,91 @@ class _CreateAgentFormState extends State<CreateAgentForm> {
     }
   }
 
+  Future<void> _createAgentAndRecord() async {
+    if (_formKey.currentState!.validate()) {
+      setState(() {
+        _isLoading = true;
+      });
+
+      try {
+
+        // Step 1: Create the agent in the provider first
+        final agentProvider = Provider.of<AgentProvider>(context, listen: false);
+        await agentProvider.getOrCreateAgent(
+          name: _nameController.text,
+          imagePath: _imagePath,
+          bitcoinBuyAndHold: _bitcoinBuyAndHold,
+          autonomousTrading: _autonomousTrading,
+        );
+
+        // Step 2: Get the wallet address from the agent provider
+        final walletAddress = agentProvider.getAgentWalletAddress(_nameController.text);
+        print('Wallet address retrieved: $walletAddress');
+
+        if (walletAddress == null) {
+          throw Exception('Failed to get wallet address for agent');
+        }
+
+        // Step 3: Prepare API request data
+        final requestData = {
+          'ticker': _nameController.text,
+          'wallet_address': walletAddress,
+          'isFutureAndOptions': _autonomousTrading,
+          'isBuyAndHold': _bitcoinBuyAndHold,
+          'activity': [],
+        };
+
+        // Step 4: Send API request
+        final response = await http.post(
+          Uri.parse('https://zynapse.zkagi.ai/record_agent'),
+          headers: {
+            'Content-Type': 'application/json',
+            'api-key': 'zk-123321',
+          },
+          body: jsonEncode(requestData),
+        );
+
+        // Step 5: Handle API response;
+        if (response.statusCode != 200) {
+          throw Exception('Failed to record agent: ${response.body}');
+        }
+
+        if (context.mounted) {
+          // Show success message
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Agent created and registered successfully!'),
+              backgroundColor: Colors.green,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+
+          // Close the modal
+          Navigator.pop(context);
+        }
+      } catch (e) {
+        print('Error details: $e');
+
+        // Show error toast
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Error creating agent: $e'),
+              backgroundColor: Colors.red,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+      } finally {
+        if (mounted) {
+          setState(() {
+            _isLoading = false;
+          });
+        }
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Padding(
@@ -505,66 +591,72 @@ class _CreateAgentFormState extends State<CreateAgentForm> {
 
             // Create button
             ElevatedButton(
-              onPressed: _isLoading
-                  ? null
-                  : () async {
-                if (_formKey.currentState!.validate()) {
-                  setState(() {
-                    _isLoading = true;
-                  });
-
-                  try {
-                    // Call getOrCreateAgent function
-                    await Provider.of<AgentProvider>(context, listen: false)
-                        .getOrCreateAgent(
-                      name: _nameController.text,
-                      imagePath: _imagePath,
-                      bitcoinBuyAndHold: _bitcoinBuyAndHold,
-                      autonomousTrading: _autonomousTrading,
-                    );
-
-                    if (context.mounted) {
-                      // This will trigger a rebuild of the HomeScreen
-                      Provider.of<AgentProvider>(context, listen: false).notifyListeners();
-                    }
-
-                    // Show success toast message
-                    if (context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Agent created successfully!'),
-                          backgroundColor: Colors.green,
-                          behavior: SnackBarBehavior.floating,
-                        ),
-                      );
-
-                      // Close the modal
-                      Navigator.pop(context);
-                    }
-                  } catch (e) {
-                    // Show error toast
-                    if (context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text('Error creating agent: $e'),
-                          backgroundColor: Colors.red,
-                          behavior: SnackBarBehavior.floating,
-                        ),
-                      );
-                    }
-                  } finally {
-                    if (mounted) {
-                      setState(() {
-                        _isLoading = false;
-                      });
-                    }
-                  }
-                }
-              },
+              onPressed: _isLoading ? null : _createAgentAndRecord,
               child: _isLoading
                   ? const CircularProgressIndicator()
                   : const Text('Create Agent'),
             ),
+            // ElevatedButton(
+            //   onPressed: _isLoading
+            //       ? null
+            //       : () async {
+            //     if (_formKey.currentState!.validate()) {
+            //       setState(() {
+            //         _isLoading = true;
+            //       });
+            //
+            //       try {
+            //         // Call getOrCreateAgent function
+            //         await Provider.of<AgentProvider>(context, listen: false)
+            //             .getOrCreateAgent(
+            //           name: _nameController.text,
+            //           imagePath: _imagePath,
+            //           bitcoinBuyAndHold: _bitcoinBuyAndHold,
+            //           autonomousTrading: _autonomousTrading,
+            //         );
+            //
+            //         if (context.mounted) {
+            //           // This will trigger a rebuild of the HomeScreen
+            //           Provider.of<AgentProvider>(context, listen: false).notifyListeners();
+            //         }
+            //
+            //         // Show success toast message
+            //         if (context.mounted) {
+            //           ScaffoldMessenger.of(context).showSnackBar(
+            //             const SnackBar(
+            //               content: Text('Agent created successfully!'),
+            //               backgroundColor: Colors.green,
+            //               behavior: SnackBarBehavior.floating,
+            //             ),
+            //           );
+            //
+            //           // Close the modal
+            //           Navigator.pop(context);
+            //         }
+            //       } catch (e) {
+            //         // Show error toast
+            //         if (context.mounted) {
+            //           ScaffoldMessenger.of(context).showSnackBar(
+            //             SnackBar(
+            //               content: Text('Error creating agent: $e'),
+            //               backgroundColor: Colors.red,
+            //               behavior: SnackBarBehavior.floating,
+            //             ),
+            //           );
+            //         }
+            //       } finally {
+            //         if (mounted) {
+            //           setState(() {
+            //             _isLoading = false;
+            //           });
+            //         }
+            //       }
+            //     }
+            //   },
+            //   child: _isLoading
+            //       ? const CircularProgressIndicator()
+            //       : const Text('Create Agent'),
+            // ),
             const SizedBox(height: 16),
           ],
         ),
