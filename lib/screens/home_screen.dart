@@ -10,6 +10,10 @@ import 'package:http/http.dart' as http;
 import '../services/wallet_storage_service.dart';
 import '../widgets/gradient_card.dart';
 import '../services/signal_scheduler_service.dart';
+import '../widgets/trending_agents_list.dart';
+import '../widgets/vertical_trending_agents.dart';
+import '../services/agent_pnl_tracking_provider.dart';
+
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({Key? key}) : super(key: key);
@@ -558,7 +562,7 @@ class _HomeScreenState extends State<HomeScreen> {
             //       ),
             //     ),
             //   ),
-            
+
             if (!agentProvider.hasAgent) _buildNoAgentBanner(context),
 
             if (agentProvider.hasAgent)
@@ -570,15 +574,6 @@ class _HomeScreenState extends State<HomeScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
-                    'Trending Agents',
-                    style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white
-                    ),
-                  ),
-                  const SizedBox(height: 16),
                   _buildTrendingAgentsList(context, agentProvider),
                 ],
               ),
@@ -631,47 +626,16 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   // Trending agents list - no changes needed
-  Widget _buildTrendingAgentsList(BuildContext context,
-      AgentProvider agentProvider) {
-    // Existing code...
-    return SizedBox(
-      height: 150,
-      child: ListView.builder(
-        scrollDirection: Axis.horizontal,
-        itemCount: agentProvider.trendingAgents.length,
-        itemBuilder: (context, index) {
-          final agent = agentProvider.trendingAgents[index];
-          return Card(
-            margin: const EdgeInsets.only(right: 12),
-            child: gradientCard(
-              child: Container(
-                width: 120,
-                padding: const EdgeInsets.all(8),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    CircleAvatar(
-                      radius: 30,
-                      backgroundColor: Colors.grey.shade200,
-                      child: const Icon(
-                          Icons.person, size: 30, color: Colors.grey),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      agent['name'] ?? 'Agent',
-                      style: const TextStyle(fontWeight: FontWeight.bold),
-                      textAlign: TextAlign.center,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          );
-        },
-      ),
-    );
+  // Widget _buildTrendingAgentsList(BuildContext context, AgentProvider agentProvider) {
+  //   // If you're using the horizontal list
+  //   return const TrendingAgentsList();
+  //
+  //   // OR if you're using the vertical ranking list
+  //   // return const TrendingAgentsRanking();
+  // }
+  Widget _buildTrendingAgentsList(BuildContext context, AgentProvider agentProvider) {
+    // Return the vertical trending agents list instead of horizontal
+    return const VerticalTrendingAgents();
   }
 
   // Modal for creating a new agent - no changes needed
@@ -976,49 +940,6 @@ class _CreateAgentFormState extends State<CreateAgentForm> {
             });
           }
         }
-        // if (_autonomousTrading) {
-        //   print('Autonomous Trading is enabled - calling get-signal API...');
-        //
-        //   try {
-        //     // Call the get-signal API with POST request and empty body
-        //     final signalResponse = await http.post(
-        //       Uri.parse('http://164.52.202.62:9000/get-signal'),
-        //       headers: {
-        //         'Content-Type': 'application/json',
-        //       },
-        //       body: '{}',
-        //     );
-        //
-        //     print('Signal API status code: ${signalResponse.statusCode}');
-        //     print('Signal API response: ${signalResponse.body}');
-        //
-        //     if (signalResponse.statusCode == 200) {
-        //       // Add the signal response to activity for tracking
-        //       activity.add({
-        //         'action': 'signal_received',
-        //         'ts': DateTime.now().toIso8601String(),
-        //         'response': signalResponse.body,
-        //       });
-        //
-        //       print('Signal received from autonomous trading API');
-        //     } else {
-        //       print('Failed to get signal from API');
-        //       activity.add({
-        //         'action': 'signal_failed',
-        //         'ts': DateTime.now().toIso8601String(),
-        //         'note': 'Failed to get signal: Status ${signalResponse.statusCode}'
-        //       });
-        //     }
-        //   } catch (e) {
-        //     print('Error calling get-signal API: $e');
-        //     activity.add({
-        //       'action': 'signal_error',
-        //       'ts': DateTime.now().toIso8601String(),
-        //       'note': 'Error: $e'
-        //     });
-        //   }
-        // }
-
 
         // Step 3: If Bitcoin Buy & Hold is enabled, check the trading signal
         if (_bitcoinBuyAndHold) {
@@ -1082,6 +1003,7 @@ class _CreateAgentFormState extends State<CreateAgentForm> {
                         'ts': timestamp,
                         'txSignature': swapResult['signature'],
                         'amount': swapResult['amount'],
+                       // 'buy_price': bitcoinCurrentPrice,
                       });
 
                       print('Swap successful! Transaction signature: ${swapResult['signature']}');
@@ -1180,6 +1102,13 @@ class _CreateAgentFormState extends State<CreateAgentForm> {
             } else {
               successMessage = 'Agent created with signal: $action';
             }
+          }
+
+          try {
+            final trackingProvider = Provider.of<AgentTrackingProvider>(context, listen: false);
+            await trackingProvider.fetchTrendingAgents();
+          } catch (e) {
+            print('Error refreshing trending agents: $e');
           }
 
           ScaffoldMessenger.of(context).showSnackBar(

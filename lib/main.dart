@@ -7,6 +7,7 @@ import 'services/auth_provider.dart';
 import 'screens/pin_setup_screen.dart';
 import 'screens/pin_login_screen.dart';
 import 'screens/home_screen.dart';
+import 'services/agent_pnl_tracking_provider.dart';
 
 void main() async {
   // This needs to be called before any async operations in main()
@@ -37,6 +38,7 @@ void main() async {
       providers: [
         ChangeNotifierProvider.value(value: authProvider),
         ChangeNotifierProvider.value(value: agentProvider),
+        ChangeNotifierProvider(create: (_) => AgentTrackingProvider()),
       ],
       child: const SolanaWalletApp(),
     ),
