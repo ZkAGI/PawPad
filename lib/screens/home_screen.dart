@@ -883,7 +883,8 @@ class _CreateAgentFormState extends State<CreateAgentForm> {
                 } else {
                   try {
                     // Execute the swap - BTC token address on Solana
-                    final btcMint = 'qfnqNqs3nCAHjnyCgLRDbBtq4p2MtHZxw8YjSyYhPoL';
+                    final btcMint = 'cbbtcf3aa214zXHbiAZQwf4122FBYbraNdFqgw4iMij';
+                       // 'qfnqNqs3nCAHjnyCgLRDbBtq4p2MtHZxw8YjSyYhPoL';
 
                     // Execute the swap using the handleBuySignal method
                     final swapResult = await agentProvider.handleBuySignal(btcMint);

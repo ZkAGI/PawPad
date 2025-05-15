@@ -14,7 +14,7 @@ import 'package:solana_hackathon_2025/services/wallet_storage_service.dart'; // 
 class AgentProvider extends ChangeNotifier {
   final FlutterSecureStorage _secureStorage = const FlutterSecureStorage();
 
-  final SolanaSwapService _solanaSwapService = SolanaSwapService();
+  //final SolanaSwapService _solanaSwapService = SolanaSwapService();
 
   // Solana connection parameters
   final String _rpcUrl = 'https://api.mainnet-beta.solana.com';
@@ -32,7 +32,7 @@ class AgentProvider extends ChangeNotifier {
 
   AgentProvider() {
     // Initialize the JS service
-    _solanaSwapService.initialize();
+    //_solanaSwapService.initialize();
   }
 
 
@@ -122,25 +122,6 @@ class AgentProvider extends ChangeNotifier {
     }
   }
 
-  // Real balance implementation
-  // Future<double> getBalance() async {
-  //   final wallet = await getOrCreateWallet();
-  //   final client = SolanaClient(
-  //     rpcUrl: Uri.parse(_rpcUrl),
-  //     websocketUrl: Uri.parse(_webSocketUrl),
-  //   );
-  //   try {
-  //     final balance = await client.rpcClient.getBalance(
-  //       wallet.address,
-  //       commitment: Commitment.confirmed,
-  //     );
-  //
-  //     // Convert from lamports to SOL
-  //     return balance.value / 1000000000;
-  //   } catch (e) {
-  //     throw Exception('Failed to get balance: ${e.toString()}');
-  //   }
-  // }
   Future<double> getBalance() async {
     final wallet = await getOrCreateWallet();
     final client = SolanaClient(
@@ -164,26 +145,6 @@ class AgentProvider extends ChangeNotifier {
     }
   }
 
-  // Initialize provider
-  // Future<void> initialize() async {
-  //   try {
-  //     _isLoading = true;
-  //     notifyListeners();
-  //
-  //     _agentName = await _secureStorage.read(key: _agentNameKey);
-  //     _agentImagePath = await _secureStorage.read(key: _agentImagePathKey);
-  //
-  //     // Load wallet addresses
-  //     await _loadAgentWalletAddresses();
-  //
-  //     _isLoading = false;
-  //     notifyListeners();
-  //   } catch (e) {
-  //     debugPrint('Error initializing agent provider: $e');
-  //     _isLoading = false;
-  //     notifyListeners();
-  //   }
-  // }
   Future<void> initialize() async {
     try {
       _isLoading = true;
@@ -266,50 +227,6 @@ class AgentProvider extends ChangeNotifier {
       rethrow;
     }
   }
-  // Future<void> getOrCreateAgent({
-  //   required String name,
-  //   String? imagePath,
-  //   required bool bitcoinBuyAndHold,
-  //   required bool autonomousTrading,
-  // }) async {
-  //   try {
-  //     _isLoading = true;
-  //     notifyListeners();
-  //
-  //     // Store agent settings
-  //     await _secureStorage.write(key: _agentNameKey, value: name);
-  //     _agentName = name;
-  //
-  //     if (imagePath != null) {
-  //       await _secureStorage.write(key: _agentImagePathKey, value: imagePath);
-  //       _agentImagePath = imagePath;
-  //     }
-  //
-  //     // Store agent preferences
-  //     await _secureStorage.write(key: 'bitcoin_buy_and_hold', value: bitcoinBuyAndHold.toString());
-  //     await _secureStorage.write(key: 'autonomous_trading', value: autonomousTrading.toString());
-  //
-  //     // Get or create a real wallet and store its address
-  //     final wallet = await getOrCreateWallet();
-  //     final walletAddress = wallet.address;
-  //
-  //     // Store the wallet address
-  //     await _secureStorage.write(key: '${name}_wallet_address', value: walletAddress);
-  //
-  //     // Update in-memory wallet address map
-  //     _agentWalletAddresses[name] = walletAddress;
-  //
-  //     debugPrint('Created real wallet address for $name: $walletAddress');
-  //
-  //     _isLoading = false;
-  //     notifyListeners();
-  //   } catch (e) {
-  //     debugPrint('Error in getOrCreateAgent: $e');
-  //     _isLoading = false;
-  //     notifyListeners();
-  //     rethrow;
-  //   }
-  // }
 
   // Load agent wallet addresses
   Future<void> _loadAgentWalletAddresses() async {
@@ -496,7 +413,8 @@ class AgentProvider extends ChangeNotifier {
             };
           } else {
             // Execute the swap - BTC token address on Solana
-            final btcMint = 'qfnqNqs3nCAHjnyCgLRDbBtq4p2MtHZxw8YjSyYhPoL';
+            final btcMint = '9n4nbM75f5Ui33ZbPYXn59EwSgE8CGsHtAeTH5YFeJ9E';
+                //'qfnqNqs3nCAHjnyCgLRDbBtq4p2MtHZxw8YjSyYhPoL';
 
             // Use our new method to handle the buy signal
             final swapResult = await handleBuySignal(btcMint);
@@ -546,74 +464,6 @@ class AgentProvider extends ChangeNotifier {
       };
     }
   }
-  // Future<Map<String, dynamic>> checkDailyTradingSignal() async {
-  //   try {
-  //     // Check if we should get a signal today
-  //     final shouldCheck = await shouldCheckTradingSignalToday();
-  //
-  //     if (!shouldCheck) {
-  //       return {'checked': false, 'message': 'Already checked trading signal today'};
-  //     }
-  //
-  //     // Check if Bitcoin Buy & Hold is enabled for the current agent
-  //     final bitcoinBuyAndHold = await _secureStorage.read(key: 'bitcoin_buy_and_hold') == 'true';
-  //
-  //     if (!bitcoinBuyAndHold) {
-  //       return {'checked': false, 'message': 'Bitcoin Buy & Hold not enabled for this agent'};
-  //     }
-  //
-  //     // Check the balance
-  //     final balance = await getBalance();
-  //
-  //     // Get the trading signal
-  //     final response = await http.get(Uri.parse('http://103.231.86.182:3020/predict'));
-  //
-  //     if (response.statusCode == 200) {
-  //       final data = jsonDecode(response.body);
-  //       final signal = data['signal'] ?? 'hold';
-  //
-  //       // Update the last signal date
-  //       await _secureStorage.write(key: 'last_signal_date', value: DateTime.now().toIso8601String());
-  //
-  //       // Handle the signal
-  //       if (signal.toLowerCase() == 'buy') {
-  //         if (balance <= 0) {
-  //           return {
-  //             'checked': true,
-  //             'signal': 'buy',
-  //             'action': 'none',
-  //             'message': 'Buy signal received but insufficient balance. Please load SOL to enable transactions.'
-  //           };
-  //         } else {
-  //           // Here you would perform the actual swap/buy
-  //           return {
-  //             'checked': true,
-  //             'signal': 'buy',
-  //             'action': 'buy',
-  //             'message': 'Buy signal received. Swap action performed successfully.'
-  //           };
-  //         }
-  //       } else {
-  //         // Hold signal
-  //         return {
-  //           'checked': true,
-  //           'signal': 'hold',
-  //           'action': 'none',
-  //           'message': 'Hold signal received. No action needed.'
-  //         };
-  //       }
-  //     } else {
-  //       return {
-  //         'checked': true,
-  //         'error': 'Failed to get prediction signal',
-  //         'message': 'Error checking trading signal'
-  //       };
-  //     }
-  //   } catch (e) {
-  //     debugPrint('Error checking daily trading signal: $e');
-  //     return {'checked': false, 'error': e.toString(), 'message': 'Error checking trading signal'};
-  //   }
-  // }
 
   Future<bool> shouldCheckTradingSignalToday() async {
     try {
@@ -642,67 +492,6 @@ class AgentProvider extends ChangeNotifier {
     }
   }
 
-  // Add this method to your AgentProvider class
-  Future<Map<String, dynamic>> handleBuySignal(String tokenMint) async {
-    if (_agentName == null) {
-      return {
-        'success': false,
-        'error': 'No agent selected',
-      };
-    }
-
-    try {
-      debugPrint("Handling buy signal for token: $tokenMint");
-
-      // Get the wallet for the current agent
-      final wallet = await getOrCreateWallet();
-      final publicKey = wallet.address;
-
-      // Get the private key using your existing implementation
-      final privateKeyHex = await getPrivateKey();
-
-      // Convert hex string to byte array for the secret key
-      final secretKey = Uint8List.fromList(
-          List<int>.generate(
-              privateKeyHex.length ~/ 2,
-                  (i) => int.parse(privateKeyHex.substring(i * 2, i * 2 + 2), radix: 16)
-          )
-      );
-
-      // Use your working Dart method to get the balance first
-      final balance = await getBalance();
-      debugPrint("Current balance: $balance SOL");
-
-      // Skip the JS balance check and use the Dart-verified balance
-      debugPrint("Executing swap with: ${publicKey.substring(0, 10)}... -> $tokenMint");
-
-      // Execute the swap using the Solana Swap Service with pre-verified balance
-      final result = await _solanaSwapService.executeSwap(
-        publicKey: publicKey,
-        secretKey: secretKey,
-        outputMint: tokenMint,
-        solBalance: balance, // Pass the balance from Dart
-      );
-
-      // If successful, update the balance
-      if (result['success'] == true) {
-        debugPrint("Swap successful: ${result['signature']}");
-        // Refresh the balance after swap
-        await getAgentBalance(_agentName!);
-      } else {
-        debugPrint("Swap failed: ${result['error']}");
-      }
-
-      return result;
-    } catch (e) {
-      debugPrint('Error handling buy signal: $e');
-      return {
-        'success': false,
-        'error': e.toString(),
-      };
-    }
-  }
-  //
   // Future<Map<String, dynamic>> handleBuySignal(String tokenMint) async {
   //   if (_agentName == null) {
   //     return {
@@ -714,34 +503,39 @@ class AgentProvider extends ChangeNotifier {
   //   try {
   //     debugPrint("Handling buy signal for token: $tokenMint");
   //
-  //     // Get the wallet for the current agent
+  //     // Get the wallet directly
   //     final wallet = await getOrCreateWallet();
   //     final publicKey = wallet.address;
   //
-  //     // Get the private key using your existing implementation
-  //     final privateKeyHex = await getPrivateKey();
+  //     // Extract secret key directly from wallet
+  //     final extracted = await wallet.extract();
+  //     // Make sure it's a Uint8List
+  //     final secretKey = Uint8List.fromList(extracted.bytes);
   //
-  //     // Convert hex string to byte array for the secret key
-  //     final secretKey = Uint8List.fromList(
-  //         List<int>.generate(
-  //             privateKeyHex.length ~/ 2,
-  //                 (i) => int.parse(privateKeyHex.substring(i * 2, i * 2 + 2), radix: 16)
-  //         )
-  //     );
+  //     debugPrint("Secret key length: ${secretKey.length} bytes");
   //
-  //     debugPrint("Executing swap with: ${publicKey.substring(0, 10)}... -> $tokenMint");
+  //     // Get the balance
+  //     final balance = await getBalance();
+  //     debugPrint("Current balance: $balance SOL");
   //
-  //     // Execute the swap using the Solana Swap Service
+  //     if (balance <= 0.005) {
+  //       return {
+  //         'success': false,
+  //         'error': 'Insufficient balance. Minimum 0.005 SOL required.',
+  //       };
+  //     }
+  //
+  //     // Execute the swap using the SolanaSwapService
   //     final result = await _solanaSwapService.executeSwap(
   //       publicKey: publicKey,
   //       secretKey: secretKey,
   //       outputMint: tokenMint,
+  //       solBalance: balance,
   //     );
   //
   //     // If successful, update the balance
   //     if (result['success'] == true) {
   //       debugPrint("Swap successful: ${result['signature']}");
-  //       // Refresh the balance after swap
   //       await getAgentBalance(_agentName!);
   //     } else {
   //       debugPrint("Swap failed: ${result['error']}");
@@ -752,8 +546,123 @@ class AgentProvider extends ChangeNotifier {
   //     debugPrint('Error handling buy signal: $e');
   //     return {
   //       'success': false,
-  //       'error': e.toString(),
+  //       'error': 'Swap failed: $e',
   //     };
   //   }
   // }
+  Future<Map<String, dynamic>> handleBuySignal(String tokenMint) async {
+    if (_agentName == null) {
+      return {
+        'success': false,
+        'error': 'No agent selected',
+      };
+    }
+
+    try {
+      debugPrint("Handling buy signal for token: $tokenMint");
+
+      // Get the wallet
+      final wallet = await getOrCreateWallet();
+      final publicKey = wallet.address;
+
+      // Get the balance
+      final balance = await getBalance();
+      debugPrint("Current balance: $balance SOL");
+
+      if (balance <= 0.005) {
+        return {
+          'success': false,
+          'error': 'Insufficient balance. Minimum 0.005 SOL required.',
+        };
+      }
+
+      // Calculate swap amount (5% of balance or max 0.0005 SOL)
+      final swapAmount = min(balance * 0.05, 0.0005);
+      final swapAmountLamports = (swapAmount * 1e9).toInt();
+      debugPrint("Swap amount: $swapAmount SOL ($swapAmountLamports lamports)");
+
+      // Step 1: Get a quote from Jupiter API
+      final quoteUrl = Uri.parse('https://quote-api.jup.ag/v6/quote');
+      final quoteParams = {
+        'inputMint': 'So11111111111111111111111111111111111111112', // SOL
+        'outputMint': tokenMint,
+        'amount': swapAmountLamports.toString(),
+        'slippageBps': '50', // 0.5% slippage
+      };
+
+      final quoteUri = quoteUrl.replace(queryParameters: quoteParams);
+      debugPrint("Requesting quote from: $quoteUri");
+
+      final quoteResponse = await http.get(quoteUri);
+
+      if (quoteResponse.statusCode != 200) {
+        debugPrint("Error getting quote: ${quoteResponse.body}");
+        return {
+          'success': false,
+          'error': 'Failed to get quote from Jupiter: ${quoteResponse.body}',
+        };
+      }
+
+      final quoteData = jsonDecode(quoteResponse.body);
+      debugPrint("Quote received: ${quoteData['outAmount']} output tokens");
+
+      // Step 2: Get a serialized transaction from Jupiter
+      final swapUrl = Uri.parse('https://quote-api.jup.ag/v6/swap');
+      final swapBody = {
+        'quoteResponse': quoteData,
+        'userPublicKey': publicKey,
+        'wrapAndUnwrapSol': true, // Auto-wrap SOL
+      };
+
+      debugPrint("Requesting swap transaction...");
+      final swapResponse = await http.post(
+        swapUrl,
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode(swapBody),
+      );
+
+      if (swapResponse.statusCode != 200) {
+        debugPrint("Error getting swap transaction: ${swapResponse.body}");
+        return {
+          'success': false,
+          'error': 'Failed to get swap transaction from Jupiter: ${swapResponse.body}',
+        };
+      }
+
+      final swapData = jsonDecode(swapResponse.body);
+      final encodedTransaction = swapData['swapTransaction'];
+      debugPrint("Received base64 transaction");
+
+      // Step 3: Sign and send the transaction using our utility function
+      final txSignature = await signAndSendJupiterSwapTx(
+        base64Tx: encodedTransaction,
+        wallet: wallet,
+      );
+
+      if (txSignature == null) {
+        return {
+          'success': false,
+          'error': 'Failed to sign and send transaction',
+        };
+      }
+
+      debugPrint("Swap transaction sent with signature: $txSignature");
+
+      // Return success
+      return {
+        'success': true,
+        'signature': txSignature,
+        'amount': swapAmount,
+        'inputMint': 'SOL',
+        'outputMint': tokenMint,
+        'outAmount': quoteData['outAmount'],
+      };
+    } catch (e) {
+      debugPrint('Error handling buy signal: $e');
+      return {
+        'success': false,
+        'error': 'Swap failed: $e',
+      };
+    }
+  }
 }

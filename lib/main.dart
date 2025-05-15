@@ -156,16 +156,16 @@ void main() async {
   await agentProvider.initialize();
 
   // Initialize the Solana swap service
-  final solanaSwapService = SolanaSwapService();
-  solanaSwapService.initialize().then((success) {
-    if (success) {
-      debugPrint("Solana Swap Service initialized successfully");
-    } else {
-      debugPrint("Solana Swap Service initialization failed, app will continue without swap functionality");
-    }
-  }).catchError((e) {
-    debugPrint("Failed to initialize SolanaSwapService, but app will continue: $e");
-  });
+  // final solanaSwapService = SolanaSwapService();
+  // solanaSwapService.initialize().then((success) {
+  //   if (success) {
+  //     debugPrint("Solana Swap Service initialized successfully");
+  //   } else {
+  //     debugPrint("Solana Swap Service initialization failed, app will continue without swap functionality");
+  //   }
+  // }).catchError((e) {
+  //   debugPrint("Failed to initialize SolanaSwapService, but app will continue: $e");
+  // });
 
   // Now we can run the app with initialized providers
   runApp(
