@@ -79,7 +79,7 @@ class _BiometricSetupScreenState extends State<BiometricSetupScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Biometric Setup'),
+        title: const Text('Biometric Setup', style: TextStyle(color: Colors.white)),
       ),
       body: Center(
         child: Padding(
@@ -89,13 +89,13 @@ class _BiometricSetupScreenState extends State<BiometricSetupScreen> {
             children: [
               const Text(
                 'Set up biometric authentication',
-                style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+                style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold,color: Colors.white),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 20),
               const Text(
                 'Use biometrics to quickly access your wallet without entering your PIN.',
-                style: TextStyle(fontSize: 16),
+                style: TextStyle(fontSize: 16,color: Colors.white),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 40),
@@ -127,7 +127,7 @@ class _BiometricSetupScreenState extends State<BiometricSetupScreen> {
               const SizedBox(height: 40),
               TextButton(
                 onPressed: _skipBiometrics,
-                child: const Text('Skip for now'),
+                child: const Text('Skip for now',style: TextStyle(color: Colors.white),),
               ),
             ],
           ),
