@@ -6,15 +6,19 @@ import 'dart:convert';
 import 'dart:typed_data';
 import 'dart:math';
 import 'package:http/http.dart' as http;
+import '../services/solana_swap_service.dart';
 
 import 'package:solana_hackathon_2025/services/wallet_storage_service.dart'; // For generating random data if needed
+
 
 class AgentProvider extends ChangeNotifier {
   final FlutterSecureStorage _secureStorage = const FlutterSecureStorage();
 
+  final SolanaSwapService _solanaSwapService = SolanaSwapService();
+
   // Solana connection parameters
-  final String _rpcUrl = 'https://api.devnet.solana.com';
-  final String _webSocketUrl = 'wss://api.devnet.solana.com';
+  final String _rpcUrl = 'https://api.mainnet-beta.solana.com';
+  final String _webSocketUrl = 'wss://api.mainnet-beta.solana.com';
 
   static const String _agentNameKey = 'agent_name';
   static const String _agentImagePathKey = 'agent_image_path';
@@ -25,6 +29,12 @@ class AgentProvider extends ChangeNotifier {
 
   // Map to store agent wallet addresses
   final Map<String, String> _agentWalletAddresses = {};
+
+  AgentProvider() {
+    // Initialize the JS service
+    _solanaSwapService.initialize();
+  }
+
 
   // Dummy trending agents data
   final List<Map<String, String>> trendingAgents = [
@@ -77,19 +87,60 @@ class AgentProvider extends ChangeNotifier {
     try {
       // Check if this is a real agent or trending agent
       if (_agentWalletAddresses.containsKey(agentName)) {
-        // Use the real getBalance implementation
-        return await getBalance();
+        // Get the wallet address for THIS SPECIFIC AGENT
+        final walletAddress = _agentWalletAddresses[agentName];
+        if (walletAddress == null) {
+          debugPrint('No wallet address found for agent: $agentName');
+          return 0.0;
+        }
+
+        // Create a client - use mainnet instead of devnet!
+        final client = SolanaClient(
+          rpcUrl: Uri.parse('https://api.mainnet-beta.solana.com'),
+          websocketUrl: Uri.parse('wss://api.mainnet-beta.solana.com'),
+        );
+
+        // Get balance for THIS SPECIFIC AGENT's wallet
+        final balance = await client.rpcClient.getBalance(
+          walletAddress,  // Use the string address directly
+          commitment: Commitment.confirmed,
+        );
+
+        // Convert to SOL and log it
+        final solBalance = balance.value / 1000000000;
+        debugPrint('Balance for $agentName: $solBalance SOL');
+
+        // Return SOL balance or convert to USD if needed
+        return solBalance;
       } else {
         // For trending agents, return a fixed balance of 0
         return 0.0;
       }
     } catch (e) {
-      debugPrint('Error getting balance: $e');
+      debugPrint('Error getting balance for agent $agentName: $e');
       return 0.0;
     }
   }
 
   // Real balance implementation
+  // Future<double> getBalance() async {
+  //   final wallet = await getOrCreateWallet();
+  //   final client = SolanaClient(
+  //     rpcUrl: Uri.parse(_rpcUrl),
+  //     websocketUrl: Uri.parse(_webSocketUrl),
+  //   );
+  //   try {
+  //     final balance = await client.rpcClient.getBalance(
+  //       wallet.address,
+  //       commitment: Commitment.confirmed,
+  //     );
+  //
+  //     // Convert from lamports to SOL
+  //     return balance.value / 1000000000;
+  //   } catch (e) {
+  //     throw Exception('Failed to get balance: ${e.toString()}');
+  //   }
+  // }
   Future<double> getBalance() async {
     final wallet = await getOrCreateWallet();
     final client = SolanaClient(
@@ -103,8 +154,12 @@ class AgentProvider extends ChangeNotifier {
       );
 
       // Convert from lamports to SOL
-      return balance.value / 1000000000;
+      double solBalance = balance.value / 1000000000;
+      debugPrint('Raw balance in lamports: ${balance.value}');
+      debugPrint('Converted balance in SOL: $solBalance');
+      return solBalance;
     } catch (e) {
+      debugPrint('Error getting balance: $e');
       throw Exception('Failed to get balance: ${e.toString()}');
     }
   }
@@ -373,6 +428,8 @@ class AgentProvider extends ChangeNotifier {
   // Add to your AgentProvider class
   Future<void> switchToAgent(String agentName) async {
     try {
+      debugPrint('Switching to agent: $agentName');
+
       // First check if this is a valid agent
       if (!_agentWalletAddresses.containsKey(agentName)) {
         throw Exception('Agent not found: $agentName');
@@ -382,10 +439,12 @@ class AgentProvider extends ChangeNotifier {
       _agentName = agentName;
       await _secureStorage.write(key: _agentNameKey, value: agentName);
 
+      // Log the wallet address we're switching to
+      final address = _agentWalletAddresses[agentName];
+      debugPrint('Switched to agent: $agentName with wallet: $address');
+
       // Notify listeners of the change
       notifyListeners();
-
-      debugPrint('Switched to agent: $agentName');
     } catch (e) {
       debugPrint('Error switching agent: $e');
       throw Exception('Failed to switch agent: $e');
@@ -394,8 +453,12 @@ class AgentProvider extends ChangeNotifier {
 
   // Add this method to AgentProvider class
   Future<Map<String, dynamic>> checkDailyTradingSignal() async {
+    if (_agentName == null) {
+      return {'checked': false, 'message': 'No agent selected'};
+    }
+
     try {
-      // Check if we should get a signal today
+      // Check if we should get a signal today using your existing method
       final shouldCheck = await shouldCheckTradingSignalToday();
 
       if (!shouldCheck) {
@@ -409,7 +472,7 @@ class AgentProvider extends ChangeNotifier {
         return {'checked': false, 'message': 'Bitcoin Buy & Hold not enabled for this agent'};
       }
 
-      // Check the balance
+      // Get the balance using your existing method
       final balance = await getBalance();
 
       // Get the trading signal
@@ -422,7 +485,7 @@ class AgentProvider extends ChangeNotifier {
         // Update the last signal date
         await _secureStorage.write(key: 'last_signal_date', value: DateTime.now().toIso8601String());
 
-        // Handle the signal
+        // Handle the buy signal
         if (signal.toLowerCase() == 'buy') {
           if (balance <= 0) {
             return {
@@ -432,21 +495,37 @@ class AgentProvider extends ChangeNotifier {
               'message': 'Buy signal received but insufficient balance. Please load SOL to enable transactions.'
             };
           } else {
-            // Here you would perform the actual swap/buy
-            return {
-              'checked': true,
-              'signal': 'buy',
-              'action': 'buy',
-              'message': 'Buy signal received. Swap action performed successfully.'
-            };
+            // Execute the swap - BTC token address on Solana
+            final btcMint = 'qfnqNqs3nCAHjnyCgLRDbBtq4p2MtHZxw8YjSyYhPoL';
+
+            // Use our new method to handle the buy signal
+            final swapResult = await handleBuySignal(btcMint);
+
+            if (swapResult['success'] == true) {
+              return {
+                'checked': true,
+                'signal': 'buy',
+                'action': 'buy',
+                'txSignature': swapResult['signature'],
+                'message': 'BUY signal executed: Swapped SOL for BTC'
+              };
+            } else {
+              return {
+                'checked': true,
+                'signal': 'buy',
+                'action': 'none',
+                'error': swapResult['error'],
+                'message': 'BUY signal received but swap failed: ${swapResult['error']}'
+              };
+            }
           }
         } else {
           // Hold signal
           return {
             'checked': true,
-            'signal': 'hold',
+            'signal': signal.toLowerCase(),
             'action': 'none',
-            'message': 'Hold signal received. No action needed.'
+            'message': 'Trading signal received: ${signal.toUpperCase()}'
           };
         }
       } else {
@@ -458,9 +537,83 @@ class AgentProvider extends ChangeNotifier {
       }
     } catch (e) {
       debugPrint('Error checking daily trading signal: $e');
-      return {'checked': false, 'error': e.toString(), 'message': 'Error checking trading signal'};
+      return {
+        'checked': true,
+        'signal': 'error',
+        'action': 'none',
+        'error': e.toString(),
+        'message': 'Error checking trading signal: $e'
+      };
     }
   }
+  // Future<Map<String, dynamic>> checkDailyTradingSignal() async {
+  //   try {
+  //     // Check if we should get a signal today
+  //     final shouldCheck = await shouldCheckTradingSignalToday();
+  //
+  //     if (!shouldCheck) {
+  //       return {'checked': false, 'message': 'Already checked trading signal today'};
+  //     }
+  //
+  //     // Check if Bitcoin Buy & Hold is enabled for the current agent
+  //     final bitcoinBuyAndHold = await _secureStorage.read(key: 'bitcoin_buy_and_hold') == 'true';
+  //
+  //     if (!bitcoinBuyAndHold) {
+  //       return {'checked': false, 'message': 'Bitcoin Buy & Hold not enabled for this agent'};
+  //     }
+  //
+  //     // Check the balance
+  //     final balance = await getBalance();
+  //
+  //     // Get the trading signal
+  //     final response = await http.get(Uri.parse('http://103.231.86.182:3020/predict'));
+  //
+  //     if (response.statusCode == 200) {
+  //       final data = jsonDecode(response.body);
+  //       final signal = data['signal'] ?? 'hold';
+  //
+  //       // Update the last signal date
+  //       await _secureStorage.write(key: 'last_signal_date', value: DateTime.now().toIso8601String());
+  //
+  //       // Handle the signal
+  //       if (signal.toLowerCase() == 'buy') {
+  //         if (balance <= 0) {
+  //           return {
+  //             'checked': true,
+  //             'signal': 'buy',
+  //             'action': 'none',
+  //             'message': 'Buy signal received but insufficient balance. Please load SOL to enable transactions.'
+  //           };
+  //         } else {
+  //           // Here you would perform the actual swap/buy
+  //           return {
+  //             'checked': true,
+  //             'signal': 'buy',
+  //             'action': 'buy',
+  //             'message': 'Buy signal received. Swap action performed successfully.'
+  //           };
+  //         }
+  //       } else {
+  //         // Hold signal
+  //         return {
+  //           'checked': true,
+  //           'signal': 'hold',
+  //           'action': 'none',
+  //           'message': 'Hold signal received. No action needed.'
+  //         };
+  //       }
+  //     } else {
+  //       return {
+  //         'checked': true,
+  //         'error': 'Failed to get prediction signal',
+  //         'message': 'Error checking trading signal'
+  //       };
+  //     }
+  //   } catch (e) {
+  //     debugPrint('Error checking daily trading signal: $e');
+  //     return {'checked': false, 'error': e.toString(), 'message': 'Error checking trading signal'};
+  //   }
+  // }
 
   Future<bool> shouldCheckTradingSignalToday() async {
     try {
@@ -488,4 +641,119 @@ class AgentProvider extends ChangeNotifier {
       return true;
     }
   }
+
+  // Add this method to your AgentProvider class
+  Future<Map<String, dynamic>> handleBuySignal(String tokenMint) async {
+    if (_agentName == null) {
+      return {
+        'success': false,
+        'error': 'No agent selected',
+      };
+    }
+
+    try {
+      debugPrint("Handling buy signal for token: $tokenMint");
+
+      // Get the wallet for the current agent
+      final wallet = await getOrCreateWallet();
+      final publicKey = wallet.address;
+
+      // Get the private key using your existing implementation
+      final privateKeyHex = await getPrivateKey();
+
+      // Convert hex string to byte array for the secret key
+      final secretKey = Uint8List.fromList(
+          List<int>.generate(
+              privateKeyHex.length ~/ 2,
+                  (i) => int.parse(privateKeyHex.substring(i * 2, i * 2 + 2), radix: 16)
+          )
+      );
+
+      // Use your working Dart method to get the balance first
+      final balance = await getBalance();
+      debugPrint("Current balance: $balance SOL");
+
+      // Skip the JS balance check and use the Dart-verified balance
+      debugPrint("Executing swap with: ${publicKey.substring(0, 10)}... -> $tokenMint");
+
+      // Execute the swap using the Solana Swap Service with pre-verified balance
+      final result = await _solanaSwapService.executeSwap(
+        publicKey: publicKey,
+        secretKey: secretKey,
+        outputMint: tokenMint,
+        solBalance: balance, // Pass the balance from Dart
+      );
+
+      // If successful, update the balance
+      if (result['success'] == true) {
+        debugPrint("Swap successful: ${result['signature']}");
+        // Refresh the balance after swap
+        await getAgentBalance(_agentName!);
+      } else {
+        debugPrint("Swap failed: ${result['error']}");
+      }
+
+      return result;
+    } catch (e) {
+      debugPrint('Error handling buy signal: $e');
+      return {
+        'success': false,
+        'error': e.toString(),
+      };
+    }
+  }
+  //
+  // Future<Map<String, dynamic>> handleBuySignal(String tokenMint) async {
+  //   if (_agentName == null) {
+  //     return {
+  //       'success': false,
+  //       'error': 'No agent selected',
+  //     };
+  //   }
+  //
+  //   try {
+  //     debugPrint("Handling buy signal for token: $tokenMint");
+  //
+  //     // Get the wallet for the current agent
+  //     final wallet = await getOrCreateWallet();
+  //     final publicKey = wallet.address;
+  //
+  //     // Get the private key using your existing implementation
+  //     final privateKeyHex = await getPrivateKey();
+  //
+  //     // Convert hex string to byte array for the secret key
+  //     final secretKey = Uint8List.fromList(
+  //         List<int>.generate(
+  //             privateKeyHex.length ~/ 2,
+  //                 (i) => int.parse(privateKeyHex.substring(i * 2, i * 2 + 2), radix: 16)
+  //         )
+  //     );
+  //
+  //     debugPrint("Executing swap with: ${publicKey.substring(0, 10)}... -> $tokenMint");
+  //
+  //     // Execute the swap using the Solana Swap Service
+  //     final result = await _solanaSwapService.executeSwap(
+  //       publicKey: publicKey,
+  //       secretKey: secretKey,
+  //       outputMint: tokenMint,
+  //     );
+  //
+  //     // If successful, update the balance
+  //     if (result['success'] == true) {
+  //       debugPrint("Swap successful: ${result['signature']}");
+  //       // Refresh the balance after swap
+  //       await getAgentBalance(_agentName!);
+  //     } else {
+  //       debugPrint("Swap failed: ${result['error']}");
+  //     }
+  //
+  //     return result;
+  //   } catch (e) {
+  //     debugPrint('Error handling buy signal: $e');
+  //     return {
+  //       'success': false,
+  //       'error': e.toString(),
+  //     };
+  //   }
+  // }
 }

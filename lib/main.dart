@@ -138,6 +138,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:solana_hackathon_2025/screens/settings_screen.dart';
 import 'package:solana_hackathon_2025/services/agent_provider.dart';
+import 'package:solana_hackathon_2025/services/solana_swap_service.dart';
 import 'services/auth_provider.dart';
 import 'screens/pin_setup_screen.dart';
 import 'screens/pin_login_screen.dart';
@@ -153,6 +154,18 @@ void main() async {
 
   // Wait for initialization to complete
   await agentProvider.initialize();
+
+  // Initialize the Solana swap service
+  final solanaSwapService = SolanaSwapService();
+  solanaSwapService.initialize().then((success) {
+    if (success) {
+      debugPrint("Solana Swap Service initialized successfully");
+    } else {
+      debugPrint("Solana Swap Service initialization failed, app will continue without swap functionality");
+    }
+  }).catchError((e) {
+    debugPrint("Failed to initialize SolanaSwapService, but app will continue: $e");
+  });
 
   // Now we can run the app with initialized providers
   runApp(

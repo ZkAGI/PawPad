@@ -20,7 +20,7 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   String? selectedAgentName;
   bool _isLoadingBalance = false;
-  double _currentBalance = 0.0;
+  double _currentBalance = 0.000;
   List<String> _availableAgents = [];
 
   @override
@@ -195,16 +195,23 @@ class _HomeScreenState extends State<HomeScreen> {
     final agentProvider = Provider.of<AgentProvider>(context, listen: false);
 
     // Exit early if no agent exists
-    if (agentProvider.agentName == null) return;
+    if (agentProvider.agentName == null) {
+      print('Cannot refresh balance: No agent selected');
+      return;
+    }
 
     setState(() {
       _isLoadingBalance = true;
     });
 
     try {
+      print('Refreshing balance for agent: ${agentProvider.agentName}');
+
       // Always use the current agent from the provider
       final balance = await agentProvider.getAgentBalance(
           agentProvider.agentName!);
+
+      print('Retrieved balance: $balance SOL');
 
       setState(() {
         _currentBalance = balance;
@@ -381,7 +388,7 @@ class _HomeScreenState extends State<HomeScreen> {
                               : Row(
                             children: [
                               Text(
-                                '\$ ${_currentBalance.toStringAsFixed(2)}',
+                                '\$ ${_currentBalance.toStringAsFixed(3)}',
                                 style: const TextStyle(
                                   fontSize: 28,
                                   fontWeight: FontWeight.bold,
@@ -406,6 +413,9 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             // Banner for new users
             if (!agentProvider.hasAgent) _buildNoAgentBanner(context),
+
+            if (agentProvider.hasAgent)
+              const SizedBox(height: 16),
 
             // Trending Agents Section
             Padding(
@@ -589,6 +599,201 @@ class _CreateAgentFormState extends State<CreateAgentForm> {
       });
     }
   }
+  // Future<void> _createAgentAndRecord() async {
+  //   if (_formKey.currentState!.validate()) {
+  //     setState(() {
+  //       _isLoading = true;
+  //     });
+  //
+  //     bool needsBalanceWarning = false;
+  //
+  //     try {
+  //       print('-------- AGENT CREATION PROCESS STARTED --------');
+  //
+  //       // Step 1: Create the agent in the provider first
+  //       final agentProvider = Provider.of<AgentProvider>(context, listen: false);
+  //       await agentProvider.getOrCreateAgent(
+  //         name: _nameController.text,
+  //         imagePath: _imagePath,
+  //         bitcoinBuyAndHold: _bitcoinBuyAndHold,
+  //         autonomousTrading: _autonomousTrading,
+  //       );
+  //
+  //       // Step 2: Get the wallet address from the agent provider
+  //       final walletAddress = agentProvider.getAgentWalletAddress(_nameController.text);
+  //       print('Wallet address retrieved: $walletAddress');
+  //
+  //       if (walletAddress == null) {
+  //         throw Exception('Failed to get wallet address for agent');
+  //       }
+  //
+  //       // Initialize activity array
+  //       List<Map<String, dynamic>> activity = [];
+  //
+  //       // Step 3: If Bitcoin Buy & Hold is enabled, check the trading signal
+  //       if (_bitcoinBuyAndHold) {
+  //         print('Bitcoin Buy & Hold is enabled - checking trading signal...');
+  //
+  //         try {
+  //           // Call the prediction API to get trading signal
+  //           final predictionResponse = await http.get(
+  //             Uri.parse('http://103.231.86.182:3020/predict'),
+  //           );
+  //
+  //           print('Prediction API status code: ${predictionResponse.statusCode}');
+  //           print('Prediction API response: ${predictionResponse.body}');
+  //
+  //           if (predictionResponse.statusCode == 200) {
+  //             // Parse the response to get the signal
+  //             final predictionData = jsonDecode(predictionResponse.body);
+  //
+  //             // Extract the signal (adjust according to actual API response format)
+  //             // Assuming the API returns something like {"signal": "buy"} or {"signal": "hold"}
+  //             final signal = predictionData['signal'] ?? 'hold';
+  //
+  //             // Create timestamp
+  //             final timestamp = DateTime.now().toIso8601String();
+  //
+  //             print('Trading signal received: $signal');
+  //
+  //             final currentBalance = await agentProvider.getBalance();
+  //
+  //             // Add action to activity based on signal
+  //             if (signal.toLowerCase() == 'buy') {
+  //               if (currentBalance <= 0) {
+  //                 // Cannot perform buy action due to insufficient balance
+  //                 print('Cannot perform buy action: Insufficient balance');
+  //                 activity.add({
+  //                   'action': 'buy_failed',
+  //                   'ts': timestamp,
+  //                   'note': 'Insufficient balance to perform swap action'
+  //                 });
+  //
+  //                 needsBalanceWarning = true;
+  //                 // Show a notification that will be displayed after agent creation
+  //                 print('Agent created with signal: BUY, but swap action could not be performed due to insufficient balance. Please load some SOL to enable transactions.');
+  //               }else {
+  //                 activity.add({
+  //                   'action': 'buy',
+  //                   'ts': timestamp,
+  //                   // Add solscan link if available in future
+  //                 });
+  //               }
+  //             } else {
+  //               activity.add({
+  //                 'action': 'hold',
+  //                 'ts': timestamp,
+  //               });
+  //             }
+  //
+  //           } else {
+  //             print('Failed to get prediction - using default "hold" action');
+  //             activity.add({
+  //               'action': 'hold',
+  //               'ts': DateTime.now().toIso8601String(),
+  //               'note': 'Default due to prediction API error'
+  //             });
+  //           }
+  //         } catch (e) {
+  //           print('Error calling prediction API: $e');
+  //           activity.add({
+  //             'action': 'hold',
+  //             'ts': DateTime.now().toIso8601String(),
+  //             'note': 'Default due to error'
+  //           });
+  //         }
+  //       }
+  //
+  //       // Step 4: Prepare API request data with activity array
+  //       final requestData = {
+  //         'ticker': _nameController.text,
+  //         'wallet_address': walletAddress,
+  //         'isFutureAndOptions': _autonomousTrading,
+  //         'isBuyAndHold': _bitcoinBuyAndHold,
+  //         'activity': activity,
+  //       };
+  //
+  //       print('Request data: ${jsonEncode(requestData)}');
+  //
+  //       // Step 5: Send API request
+  //       try {
+  //         final response = await http.post(
+  //           Uri.parse('https://zynapse.zkagi.ai/record_agent'),
+  //           headers: {
+  //             'Content-Type': 'application/json',
+  //             'api-key': 'zk-123321',
+  //           },
+  //           body: jsonEncode(requestData),
+  //         );
+  //
+  //         print('Record API status code: ${response.statusCode}');
+  //
+  //         // Handle API response
+  //         if (response.statusCode != 200) {
+  //           throw Exception('Failed to record agent: ${response.body}');
+  //         }
+  //       } catch (e) {
+  //         print('Error sending to record API: $e');
+  //         // Continue and show success message anyway since the agent was created locally
+  //         print('Agent created locally but API recording failed: $e');
+  //       }
+  //
+  //       if (context.mounted) {
+  //         // Create a detailed success message that includes trading action if available
+  //         String successMessage = 'Agent created successfully!';
+  //         if (activity.isNotEmpty) {
+  //           final action = activity.first['action'].toString().toUpperCase();
+  //           successMessage = 'Agent created with signal: $action';
+  //         }
+  //
+  //         ScaffoldMessenger.of(context).showSnackBar(
+  //           SnackBar(
+  //             content: Text(successMessage),
+  //             backgroundColor: Colors.green,
+  //             behavior: SnackBarBehavior.floating,
+  //           ),
+  //         );
+  //
+  //         // Close the modal
+  //         Navigator.pop(context, _nameController.text);
+  //
+  //         if (needsBalanceWarning && context.mounted) {
+  //           // Delay slightly to allow the UI to update
+  //           Future.delayed(const Duration(milliseconds: 500), () {
+  //             if (context.mounted) {
+  //               // This requires adding the dialog function to a location visible to the form
+  //               // Pass the parent context to access the _showInsufficientBalanceDialog method
+  //               _showInsufficientBalanceDialogAfterCreation(context, 'BUY');
+  //             }
+  //           });
+  //         }
+  //
+  //       }
+  //     } catch (e) {
+  //       print('Error creating agent: $e');
+  //
+  //       // Show error toast
+  //       if (context.mounted) {
+  //         ScaffoldMessenger.of(context).showSnackBar(
+  //           SnackBar(
+  //             content: Text('Error creating agent: $e'),
+  //             backgroundColor: Colors.red,
+  //             behavior: SnackBarBehavior.floating,
+  //           ),
+  //         );
+  //       }
+  //     } finally {
+  //       if (mounted) {
+  //         setState(() {
+  //           _isLoading = false;
+  //         });
+  //       }
+  //     }
+  //   }
+  // }
+
+  // Updated version of the function to fix the insufficient balance handling
+
   Future<void> _createAgentAndRecord() async {
     if (_formKey.currentState!.validate()) {
       setState(() {
@@ -617,42 +822,56 @@ class _CreateAgentFormState extends State<CreateAgentForm> {
           throw Exception('Failed to get wallet address for agent');
         }
 
+        // We need to switch to the newly created agent first - IMPORTANT!
+        await agentProvider.switchToAgent(_nameController.text);
+
         // Initialize activity array
         List<Map<String, dynamic>> activity = [];
 
         // Step 3: If Bitcoin Buy & Hold is enabled, check the trading signal
         if (_bitcoinBuyAndHold) {
+          final now = DateTime.now();
           print('Bitcoin Buy & Hold is enabled - checking trading signal...');
+
 
           try {
             // Call the prediction API to get trading signal
-            final predictionResponse = await http.get(
-              Uri.parse('http://103.231.86.182:3020/predict'),
-            );
+            // final predictionResponse = await http.get(
+            //   Uri.parse('http://103.231.86.182:3020/predict'),
+            // );
+            //
+            // print('Prediction API status code: ${predictionResponse.statusCode}');
+            // print('Prediction API response: ${predictionResponse.body}');
 
-            print('Prediction API status code: ${predictionResponse.statusCode}');
-            print('Prediction API response: ${predictionResponse.body}');
-
-            if (predictionResponse.statusCode == 200) {
+            // if (predictionResponse.statusCode == 200  ) {
               // Parse the response to get the signal
-              final predictionData = jsonDecode(predictionResponse.body);
+             // final predictionData = jsonDecode(predictionResponse.body);
 
-              // Extract the signal (adjust according to actual API response format)
-              // Assuming the API returns something like {"signal": "buy"} or {"signal": "hold"}
-              final signal = predictionData['signal'] ?? 'hold';
+              final predictionData = {
+                'signal': 'buy',
+                'confidence': 0.95,
+                'timestamp': DateTime.now().toIso8601String()
+              };
+
+              // Extract the signal
+              // final signal = predictionData['signal'] ?? 'hold';
+              final String signal = (predictionData['signal'] ?? 'hold').toString();
 
               // Create timestamp
               final timestamp = DateTime.now().toIso8601String();
 
               print('Trading signal received: $signal');
 
-              final currentBalance = await agentProvider.getBalance();
-
               // Add action to activity based on signal
               if (signal.toLowerCase() == 'buy') {
-                if (currentBalance <= 0) {
+                // Get the current balance AFTER switching to the new agent
+                final currentBalance = await agentProvider.getBalance();
+                print('Current balance: $currentBalance SOL');
+
+                // Check if balance is sufficient (use 0.01 as minimum threshold)
+                if (currentBalance < 0.01) {
                   // Cannot perform buy action due to insufficient balance
-                  print('Cannot perform buy action: Insufficient balance');
+                  print('Cannot perform buy action: Insufficient balance (${currentBalance} SOL)');
                   activity.add({
                     'action': 'buy_failed',
                     'ts': timestamp,
@@ -660,30 +879,64 @@ class _CreateAgentFormState extends State<CreateAgentForm> {
                   });
 
                   needsBalanceWarning = true;
-                  // Show a notification that will be displayed after agent creation
                   print('Agent created with signal: BUY, but swap action could not be performed due to insufficient balance. Please load some SOL to enable transactions.');
-                }else {
-                  activity.add({
-                    'action': 'buy',
-                    'ts': timestamp,
-                    // Add solscan link if available in future
-                  });
+                } else {
+                  try {
+                    // Execute the swap - BTC token address on Solana
+                    final btcMint = 'qfnqNqs3nCAHjnyCgLRDbBtq4p2MtHZxw8YjSyYhPoL';
+
+                    // Execute the swap using the handleBuySignal method
+                    final swapResult = await agentProvider.handleBuySignal(btcMint);
+
+                    if (swapResult['success'] == true) {
+                      // Swap was successful
+                      activity.add({
+                        'action': 'buy',
+                        'ts': timestamp,
+                        'txSignature': swapResult['signature'],
+                        'amount': swapResult['amount'],
+                      });
+
+                      print('Swap successful! Transaction signature: ${swapResult['signature']}');
+                    } else {
+                      // Swap failed
+                      activity.add({
+                        'action': 'buy_failed',
+                        'ts': timestamp,
+                        'note': 'Swap failed: ${swapResult['error']}'
+                      });
+
+                      needsBalanceWarning = true;
+                      print('Swap failed: ${swapResult['error']}');
+                    }
+                  } catch (e) {
+                    // Handle any errors during the swap process
+                    print('Error executing swap: $e');
+                    activity.add({
+                      'action': 'buy_failed',
+                      'ts': timestamp,
+                      'note': 'Swap error: $e'
+                    });
+
+                    needsBalanceWarning = true;
+                  }
                 }
               } else {
+                // Signal is hold
                 activity.add({
-                  'action': 'hold',
+                  'action': 'hold', //hold
                   'ts': timestamp,
                 });
               }
 
-            } else {
-              print('Failed to get prediction - using default "hold" action');
-              activity.add({
-                'action': 'hold',
-                'ts': DateTime.now().toIso8601String(),
-                'note': 'Default due to prediction API error'
-              });
-            }
+            // } else {
+            //   print('Failed to get prediction - using default "hold" action');
+            //   activity.add({
+            //     'action': 'hold',
+            //     'ts': DateTime.now().toIso8601String(),
+            //     'note': 'Default due to prediction API error'
+            //   });
+            // }
           } catch (e) {
             print('Error calling prediction API: $e');
             activity.add({
@@ -733,7 +986,13 @@ class _CreateAgentFormState extends State<CreateAgentForm> {
           String successMessage = 'Agent created successfully!';
           if (activity.isNotEmpty) {
             final action = activity.first['action'].toString().toUpperCase();
-            successMessage = 'Agent created with signal: $action';
+            if (action == 'BUY' && activity.first.containsKey('txSignature')) {
+              successMessage = 'Agent created with signal: BUY. Swap executed!';
+            } else if (action == 'BUY_FAILED') {
+              successMessage = 'Agent created with signal: BUY, but swap failed.';
+            } else {
+              successMessage = 'Agent created with signal: $action';
+            }
           }
 
           ScaffoldMessenger.of(context).showSnackBar(
@@ -751,13 +1010,11 @@ class _CreateAgentFormState extends State<CreateAgentForm> {
             // Delay slightly to allow the UI to update
             Future.delayed(const Duration(milliseconds: 500), () {
               if (context.mounted) {
-                // This requires adding the dialog function to a location visible to the form
-                // Pass the parent context to access the _showInsufficientBalanceDialog method
+                // Show insufficient balance dialog
                 _showInsufficientBalanceDialogAfterCreation(context, 'BUY');
               }
             });
           }
-
         }
       } catch (e) {
         print('Error creating agent: $e');
