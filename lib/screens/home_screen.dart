@@ -751,6 +751,7 @@ class _checkDailyTradingSignal {
 class CreateAgentForm extends StatefulWidget {
   const CreateAgentForm({Key? key}) : super(key: key);
 
+
   @override
   State<CreateAgentForm> createState() => _CreateAgentFormState();
 }
@@ -763,6 +764,33 @@ class _CreateAgentFormState extends State<CreateAgentForm> {
   // Add toggle state variables
   bool _bitcoinBuyAndHold = false;
   bool _autonomousTrading = false;
+
+  // Add near the top of your _CreateAgentFormState class
+  bool _showCustomTrading = false;
+  Set<String> _selectedCoins = {};
+  String? _selectedTimeframe;
+
+// List of available coins
+  final List<String> _availableCoins = [
+    "TRUMP",
+    "BONK",
+    "FARTCOIN",
+    "PENGU",
+    "POPCAT",
+    "PNUT",
+    "AI16Z",
+    "MEW",
+    "VIRTUAL",
+    "SPX",
+    "PYTH",
+    "GRASS",
+    "ATH",
+    "W",
+    "MOODENG"
+  ];
+
+// List of available timeframes
+  final List<String> _availableTimeframes = ["1h", "4h", "1d"];
 
   @override
   void dispose() {
@@ -1056,6 +1084,41 @@ class _CreateAgentFormState extends State<CreateAgentForm> {
           }
         }
 
+        // Handle custom trading signals if selections are made
+        if (_showCustomTrading && _selectedCoins.isNotEmpty && _selectedTimeframe != null) {
+          try {
+            final requestBody = {
+              "symbols": _selectedCoins.toList(),
+              "timeframe": _selectedTimeframe
+            };
+
+            print('Sending custom trading setup: ${jsonEncode(requestBody)}');
+
+            // Make the API call
+            final response = await http.post(
+              Uri.parse('http://164.52.202.62:6000/get-signal'),
+              headers: {"Content-Type": "application/json"},
+              body: jsonEncode(requestBody),
+            );
+
+            if (response.statusCode == 200) {
+              final signalData = jsonDecode(response.body);
+              print('Custom trading signal received: $signalData');
+
+              // You can process the signal here and add to activity array if needed
+              activity.add({
+                'action': 'custom_trading_setup',
+                'ts': DateTime.now().toIso8601String(),
+                'symbols': _selectedCoins.toList(),
+                'timeframe': _selectedTimeframe,
+                'response': response.body,
+              });
+            }
+          } catch (e) {
+            print('Error setting up custom trading: $e');
+          }
+        }
+
         // Step 4: Prepare API request data with activity array
         final requestData = {
           'ticker': _nameController.text,
@@ -1257,6 +1320,135 @@ class _CreateAgentFormState extends State<CreateAgentForm> {
             ),
 
             const SizedBox(height: 24),
+
+            // Custom Trading section
+            InkWell(
+              onTap: () {
+                setState(() {
+                  _showCustomTrading = !_showCustomTrading;
+                });
+              },
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8.0),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'Custom Trading',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.purple,
+                      ),
+                    ),
+                    Icon(
+                      _showCustomTrading ? Icons.arrow_drop_up : Icons.arrow_drop_down,
+                      color: Colors.purple,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
+// Show custom trading content if expanded
+            if (_showCustomTrading) ...[
+              const SizedBox(height: 8),
+
+              // Coins selection
+              Container(
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.05),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                padding: const EdgeInsets.all(12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Select Coins',
+                      style: TextStyle(
+                        color: Colors.purple.shade300,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+
+                    // Coin selection grid
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: _availableCoins.map((coin) {
+                        final isSelected = _selectedCoins.contains(coin);
+                        return InkWell(
+                          onTap: () {
+                            setState(() {
+                              if (isSelected) {
+                                _selectedCoins.remove(coin);
+                              } else {
+                                _selectedCoins.add(coin);
+                              }
+                            });
+                          },
+                          child: Chip(
+                            label: Text(
+                              coin,
+                              style: TextStyle(
+                                color: isSelected ? Colors.white : Colors.white70,
+                                fontSize: 12,
+                              ),
+                            ),
+                            backgroundColor: isSelected ? Colors.purple : Colors.purple.withOpacity(0.3),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+
+                    const SizedBox(height: 16),
+
+                    // Timeframe selection
+                    Text(
+                      'Select Timeframe',
+                      style: TextStyle(
+                        color: Colors.purple.shade300,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+
+                    // Timeframe selection buttons
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                      children: _availableTimeframes.map((timeframe) {
+                        final isSelected = _selectedTimeframe == timeframe;
+                        return InkWell(
+                          onTap: () {
+                            setState(() {
+                              _selectedTimeframe = timeframe;
+                            });
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                            decoration: BoxDecoration(
+                              color: isSelected ? Colors.purple : Colors.transparent,
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(
+                                color: isSelected ? Colors.purple : Colors.purple.shade300,
+                              ),
+                            ),
+                            child: Text(
+                              timeframe,
+                              style: TextStyle(
+                                color: isSelected ? Colors.white : Colors.purple.shade300,
+                              ),
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  ],
+                ),
+              ),
+            ],
 
             // Create button
             ElevatedButton(
