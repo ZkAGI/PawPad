@@ -903,6 +903,7 @@ class _CreateAgentFormState extends State<CreateAgentForm> {
   }
 
   Future<void> _createAgentAndRecord() async {
+
     if (_bitcoinBuyAndHold || _autonomousTrading || (_showCustomTrading && _selectedCoins.isNotEmpty && _selectedTimeframe != null)) {
       // Initialize the scheduler service to start checking signals for the new agent
       final schedulerService = SignalSchedulerService();
@@ -1319,6 +1320,12 @@ class _CreateAgentFormState extends State<CreateAgentForm> {
           'activity': activity,
           if (customStrategyData != null) 'isCustomStrategy': customStrategyData,
         };
+
+        if (_imagePath != null) {
+          final bytes = await File(_imagePath!).readAsBytes();
+          final base64Image = base64Encode(bytes);
+          requestData['ticker_img'] = base64Image;
+        }
 
         print('Request data: ${jsonEncode(requestData)}');
 

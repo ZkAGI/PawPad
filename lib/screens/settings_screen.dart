@@ -1400,7 +1400,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           'ticker': tickerName,
                           'addCoins': addedCoins,
                           'removeCoins': removeCoins,
-                          'newTimestamp': updatedTimeframe,  // Using newTimestamp for the timeframe value (like "4h")
+                          'newTimeframe': updatedTimeframe,  // Using newTimeframe for the timeframe value (like "4h")
                           'ticker_img': "",  // Empty as requested
                         };
 
