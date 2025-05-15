@@ -867,6 +867,41 @@ class _CreateAgentFormState extends State<CreateAgentForm> {
     }
   }
 
+  Future<double> _fetchCurrentBitcoinPrice() async {
+    try {
+      // Try to get the price from CoinGecko API
+      final response = await http.get(
+        Uri.parse('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd'),
+      );
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        if (data.containsKey('bitcoin') && data['bitcoin'].containsKey('usd')) {
+          return data['bitcoin']['usd'].toDouble();
+        }
+      }
+
+      // Fallback to another API if CoinGecko fails
+      final backupResponse = await http.get(
+        Uri.parse('https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT'),
+      );
+
+      if (backupResponse.statusCode == 200) {
+        final data = json.decode(backupResponse.body);
+        if (data.containsKey('price')) {
+          return double.parse(data['price']);
+        }
+      }
+
+      // Last resort - use a hardcoded current market price
+      return 32000.0;
+    } catch (e) {
+      print('Error fetching Bitcoin price: $e');
+      // Return a reasonable market price
+      return 32000.0;
+    }
+  }
+
   Future<void> _createAgentAndRecord() async {
     if (_bitcoinBuyAndHold || _autonomousTrading || (_showCustomTrading && _selectedCoins.isNotEmpty && _selectedTimeframe != null)) {
       // Initialize the scheduler service to start checking signals for the new agent
@@ -1083,13 +1118,15 @@ class _CreateAgentFormState extends State<CreateAgentForm> {
                     final swapResult = await agentProvider.handleBuySignal(btcMint);
 
                     if (swapResult['success'] == true) {
+
+                      double bitcoinCurrentPrice = await _fetchCurrentBitcoinPrice();
                       // Swap was successful
                       activity.add({
                         'action': 'buy',
                         'ts': timestamp,
                         'txSignature': swapResult['signature'],
                         'amount': swapResult['amount'],
-                       // 'buy_price': bitcoinCurrentPrice,
+                       'buy_price': bitcoinCurrentPrice,
                       });
 
                       print('Swap successful! Transaction signature: ${swapResult['signature']}');
