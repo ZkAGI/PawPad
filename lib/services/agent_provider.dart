@@ -369,29 +369,152 @@ class AgentProvider extends ChangeNotifier {
   }
 
   // Add this method to AgentProvider class
-  Future<Map<String, dynamic>> checkDailyTradingSignal() async {
+  Future<bool> shouldCheckBitcoinSignalToday() async {
+    try {
+      // Get the last Bitcoin signal date
+      final lastSignalDateStr = await _secureStorage.read(key: 'last_bitcoin_signal_date');
+
+      if (lastSignalDateStr == null) {
+        // No previous signal, should check
+        return true;
+      }
+
+      final lastSignalDate = DateTime.parse(lastSignalDateStr);
+      final now = DateTime.now();
+
+      // Check if it's a new day since the last signal
+      final isSameDay = lastSignalDate.year == now.year &&
+          lastSignalDate.month == now.month &&
+          lastSignalDate.day == now.day;
+
+      // Only check for a new signal if it's a different day
+      if (!isSameDay) {
+        return true;
+      }
+
+      // Check if current time is after 3 PM IST and the last check was before 3 PM
+      // IST is UTC+5:30
+      final utcOffset = const Duration(hours: 5, minutes: 30);
+      final nowInIST = now.toUtc().add(utcOffset);
+      final lastSignalInIST = lastSignalDate.toUtc().add(utcOffset);
+
+      // If it's after 3 PM IST now and the last signal was before 3 PM IST today
+      final isAfter3PMIST = nowInIST.hour >= 15;
+      final wasLastCheckBefore3PMIST = lastSignalInIST.hour < 15;
+
+      return isAfter3PMIST && wasLastCheckBefore3PMIST;
+    } catch (e) {
+      debugPrint('Error checking if should request Bitcoin trading signal: $e');
+      // Default to true if there's an error
+      return true;
+    }
+  }
+
+// Add this method for autonomous trading checks every 6 hours
+  Future<bool> shouldCheckAutonomousSignal() async {
+    try {
+      // Get the last autonomous signal date
+      final lastSignalDateStr = await _secureStorage.read(key: 'last_autonomous_signal_date');
+
+      if (lastSignalDateStr == null) {
+        // No previous signal, should check
+        return true;
+      }
+
+      final lastSignalDate = DateTime.parse(lastSignalDateStr);
+      final now = DateTime.now();
+
+      // Check if 6 hours have passed since the last check
+      final hoursSinceLastCheck = now.difference(lastSignalDate).inHours;
+
+      return hoursSinceLastCheck >= 6;
+    } catch (e) {
+      debugPrint('Error checking if should request autonomous trading signal: $e');
+      // Default to true if there's an error
+      return true;
+    }
+  }
+
+// This replaces the previous checkDailyTradingSignal method
+  Future<Map<String, dynamic>> checkTradingSignals() async {
     if (_agentName == null) {
       return {'checked': false, 'message': 'No agent selected'};
     }
 
     try {
-      // Check if we should get a signal today using your existing method
-      final shouldCheck = await shouldCheckTradingSignalToday();
-
-      if (!shouldCheck) {
-        return {'checked': false, 'message': 'Already checked trading signal today'};
-      }
-
       // Check if Bitcoin Buy & Hold is enabled for the current agent
       final bitcoinBuyAndHold = await _secureStorage.read(key: 'bitcoin_buy_and_hold') == 'true';
-
-      if (!bitcoinBuyAndHold) {
-        return {'checked': false, 'message': 'Bitcoin Buy & Hold not enabled for this agent'};
-      }
+      final autonomousTrading = await _secureStorage.read(key: 'autonomous_trading') == 'true';
 
       // Get the balance using your existing method
       final balance = await getBalance();
 
+      Map<String, dynamic> result = {'checked': true, 'signals': []};
+
+      // Check Bitcoin Buy & Hold Signal (once a day at 3 PM IST)
+      if (bitcoinBuyAndHold) {
+        final shouldCheckBitcoin = await shouldCheckBitcoinSignalToday();
+
+        if (shouldCheckBitcoin) {
+          final bitcoinResult = await checkBitcoinBuyAndHoldSignal(balance);
+          result['signals'].add(bitcoinResult);
+
+          // If a buy action was performed, add a message
+          if (bitcoinResult['action'] == 'buy') {
+            result['message'] = 'BTC buy signal executed successfully!';
+          } else if (bitcoinResult['signal'] == 'buy' && bitcoinResult['action'] == 'none') {
+            result['message'] = 'BTC buy signal received but insufficient balance.';
+          }
+        }
+      }
+
+      // Check Autonomous Trading Signal (every 6 hours)
+      if (autonomousTrading) {
+        final shouldCheckAutonomous = await shouldCheckAutonomousSignal();
+
+        if (shouldCheckAutonomous) {
+          final autonomousResult = await checkAutonomousTradingSignal(balance);
+          result['signals'].add(autonomousResult);
+
+          // Add message for autonomous signal if needed
+          if (autonomousResult['action'] == 'buy') {
+            result['message'] = result['message'] ?? '';
+            if (result['message'].isNotEmpty) {
+              result['message'] += ' ';
+            }
+            final symbol = autonomousResult['symbol'] ?? 'token';
+            result['message'] += 'Long signal for $symbol executed successfully!';
+          } else if (autonomousResult['signal'] == 'long' && autonomousResult['action'] == 'none') {
+            result['message'] = result['message'] ?? '';
+            if (result['message'].isNotEmpty) {
+              result['message'] += ' ';
+            }
+            result['message'] += 'Long signal received but insufficient balance.';
+          }
+        }
+      }
+
+      // If no signals were checked, return a generic message
+      if (result['signals'].isEmpty) {
+        result['message'] = 'No signals checked at this time.';
+      }
+
+      return result;
+    } catch (e) {
+      debugPrint('Error checking trading signals: $e');
+      return {
+        'checked': true,
+        'signal': 'error',
+        'action': 'none',
+        'error': e.toString(),
+        'message': 'Error checking trading signals: $e'
+      };
+    }
+  }
+
+// Check Bitcoin Buy & Hold signal
+  Future<Map<String, dynamic>> checkBitcoinBuyAndHoldSignal(double balance) async {
+    try {
       // Get the trading signal
       final response = await http.get(Uri.parse('http://103.231.86.182:3020/predict'));
 
@@ -399,29 +522,36 @@ class AgentProvider extends ChangeNotifier {
         final data = jsonDecode(response.body);
         final signal = data['signal'] ?? 'hold';
 
-        // Update the last signal date
-        await _secureStorage.write(key: 'last_signal_date', value: DateTime.now().toIso8601String());
+        // Update the last signal date for Bitcoin
+        final now = DateTime.now();
+        await _secureStorage.write(key: 'last_bitcoin_signal_date', value: now.toIso8601String());
 
         // Handle the buy signal
         if (signal.toLowerCase() == 'buy') {
-          if (balance <= 0) {
+          if (balance <= 0.01) {
             return {
-              'checked': true,
+              'type': 'bitcoin',
               'signal': 'buy',
               'action': 'none',
               'message': 'Buy signal received but insufficient balance. Please load SOL to enable transactions.'
             };
           } else {
             // Execute the swap - BTC token address on Solana
-            final btcMint = '9n4nbM75f5Ui33ZbPYXn59EwSgE8CGsHtAeTH5YFeJ9E';
-                //'qfnqNqs3nCAHjnyCgLRDbBtq4p2MtHZxw8YjSyYhPoL';
+            final btcMint = 'cbbtcf3aa214zXHbiAZQwf4122FBYbraNdFqgw4iMij';
 
-            // Use our new method to handle the buy signal
+            // Use our method to handle the buy signal
             final swapResult = await handleBuySignal(btcMint);
 
             if (swapResult['success'] == true) {
+              // Record transaction in activity log
+              await recordTradingActivity('bitcoin_buy', {
+                'ts': now.toIso8601String(),
+                'txSignature': swapResult['signature'],
+                'amount': swapResult['amount'],
+              });
+
               return {
-                'checked': true,
+                'type': 'bitcoin',
                 'signal': 'buy',
                 'action': 'buy',
                 'txSignature': swapResult['signature'],
@@ -429,7 +559,7 @@ class AgentProvider extends ChangeNotifier {
               };
             } else {
               return {
-                'checked': true,
+                'type': 'bitcoin',
                 'signal': 'buy',
                 'action': 'none',
                 'error': swapResult['error'],
@@ -440,30 +570,280 @@ class AgentProvider extends ChangeNotifier {
         } else {
           // Hold signal
           return {
-            'checked': true,
+            'type': 'bitcoin',
             'signal': signal.toLowerCase(),
             'action': 'none',
-            'message': 'Trading signal received: ${signal.toUpperCase()}'
+            'message': 'Bitcoin trading signal received: ${signal.toUpperCase()}'
           };
         }
       } else {
         return {
-          'checked': true,
+          'type': 'bitcoin',
           'error': 'Failed to get prediction signal',
-          'message': 'Error checking trading signal'
+          'message': 'Error checking Bitcoin trading signal'
         };
       }
     } catch (e) {
-      debugPrint('Error checking daily trading signal: $e');
+      debugPrint('Error checking Bitcoin trading signal: $e');
       return {
-        'checked': true,
+        'type': 'bitcoin',
         'signal': 'error',
         'action': 'none',
         'error': e.toString(),
-        'message': 'Error checking trading signal: $e'
+        'message': 'Error checking Bitcoin trading signal: $e'
       };
     }
   }
+
+// Check Autonomous Trading signal
+  Future<Map<String, dynamic>> checkAutonomousTradingSignal(double balance) async {
+    try {
+      // Call the autonomous trading API to get signal
+      final signalResponse = await http.post(
+        Uri.parse('http://164.52.202.62:9000/get-signal'),
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: '{}',
+      );
+
+      // Update the last signal date for autonomous trading
+      final now = DateTime.now();
+      await _secureStorage.write(key: 'last_autonomous_signal_date', value: now.toIso8601String());
+
+      if (signalResponse.statusCode == 200) {
+        final signalData = jsonDecode(signalResponse.body);
+
+        // Extract output mint and signal from response
+        final outputMint = signalData['Output Mint'] as String?;
+        final tradingSymbol = signalData['Symbol'] as String?;
+        final signalType = signalData['Signal'] as String?;
+
+        // Process signal if it's a Long signal and we have an output mint
+        if (outputMint != null && signalType != null && signalType.contains('Long')) {
+          if (balance <= 0.01) {
+            return {
+              'type': 'autonomous',
+              'signal': 'long',
+              'symbol': tradingSymbol,
+              'action': 'none',
+              'message': 'Long signal received for $tradingSymbol but insufficient balance. Please load SOL to enable transactions.'
+            };
+          } else {
+            // Execute the swap with the output mint from the signal
+            final swapResult = await handleBuySignal(outputMint);
+
+            if (swapResult['success'] == true) {
+              // Record transaction in activity log
+              await recordTradingActivity('autonomous_buy', {
+                'ts': now.toIso8601String(),
+                'txSignature': swapResult['signature'],
+                'amount': swapResult['amount'],
+                'symbol': tradingSymbol,
+                'outputMint': outputMint,
+                'signal': signalType,
+                'entryPrice': signalData['Entry Price'],
+              });
+
+              return {
+                'type': 'autonomous',
+                'signal': 'long',
+                'action': 'buy',
+                'symbol': tradingSymbol,
+                'txSignature': swapResult['signature'],
+                'message': 'LONG signal executed: Swapped SOL for $tradingSymbol'
+              };
+            } else {
+              return {
+                'type': 'autonomous',
+                'signal': 'long',
+                'action': 'none',
+                'symbol': tradingSymbol,
+                'error': swapResult['error'],
+                'message': 'LONG signal received but swap failed: ${swapResult['error']}'
+              };
+            }
+          }
+        } else {
+          // Not a Long signal or missing output mint
+          return {
+            'type': 'autonomous',
+            'signal': signalType?.toLowerCase() ?? 'unknown',
+            'symbol': tradingSymbol,
+            'action': 'none',
+            'message': 'Signal received: ${signalType ?? "Unknown"} for ${tradingSymbol ?? "Unknown"} - No action required'
+          };
+        }
+      } else {
+        return {
+          'type': 'autonomous',
+          'error': 'Failed to get autonomous trading signal',
+          'message': 'Error checking autonomous trading signal'
+        };
+      }
+    } catch (e) {
+      debugPrint('Error checking autonomous trading signal: $e');
+      return {
+        'type': 'autonomous',
+        'signal': 'error',
+        'action': 'none',
+        'error': e.toString(),
+        'message': 'Error checking autonomous trading signal: $e'
+      };
+    }
+  }
+
+// Helper method to record trading activity
+  Future<void> recordTradingActivity(String activityType, Map<String, dynamic> activityData) async {
+    try {
+      if (_agentName == null) return;
+
+      // Get existing activity or initialize new array
+      final activityStr = await _secureStorage.read(key: '${_agentName}_activity');
+      List<dynamic> activity = [];
+
+      if (activityStr != null) {
+        activity = jsonDecode(activityStr);
+      }
+
+      // Add new activity with type
+      final newActivity = {
+        'type': activityType,
+        ...activityData,
+      };
+
+      activity.add(newActivity);
+
+      // Store updated activity
+      await _secureStorage.write(
+        key: '${_agentName}_activity',
+        value: jsonEncode(activity),
+      );
+
+      // Limit stored activity to last 50 entries to prevent excessive storage
+      if (activity.length > 50) {
+        activity = activity.sublist(activity.length - 50);
+        await _secureStorage.write(
+          key: '${_agentName}_activity',
+          value: jsonEncode(activity),
+        );
+      }
+
+      debugPrint('Recorded trading activity: $activityType');
+    } catch (e) {
+      debugPrint('Error recording trading activity: $e');
+    }
+  }
+
+// Get trading activity history
+  Future<List<Map<String, dynamic>>> getTradingActivityHistory() async {
+    try {
+      if (_agentName == null) return [];
+
+      final activityStr = await _secureStorage.read(key: '${_agentName}_activity');
+      if (activityStr == null) return [];
+
+      final activityList = jsonDecode(activityStr) as List;
+      return activityList.map((item) => Map<String, dynamic>.from(item)).toList();
+    } catch (e) {
+      debugPrint('Error getting trading activity history: $e');
+      return [];
+    }
+  }
+  // Future<Map<String, dynamic>> checkDailyTradingSignal() async {
+  //   if (_agentName == null) {
+  //     return {'checked': false, 'message': 'No agent selected'};
+  //   }
+  //
+  //   try {
+  //     // Check if we should get a signal today using your existing method
+  //     final shouldCheck = await shouldCheckTradingSignalToday();
+  //
+  //     if (!shouldCheck) {
+  //       return {'checked': false, 'message': 'Already checked trading signal today'};
+  //     }
+  //
+  //     // Check if Bitcoin Buy & Hold is enabled for the current agent
+  //     final bitcoinBuyAndHold = await _secureStorage.read(key: 'bitcoin_buy_and_hold') == 'true';
+  //
+  //     if (!bitcoinBuyAndHold) {
+  //       return {'checked': false, 'message': 'Bitcoin Buy & Hold not enabled for this agent'};
+  //     }
+  //
+  //     // Get the balance using your existing method
+  //     final balance = await getBalance();
+  //
+  //     // Get the trading signal
+  //     final response = await http.get(Uri.parse('http://103.231.86.182:3020/predict'));
+  //
+  //     if (response.statusCode == 200) {
+  //       final data = jsonDecode(response.body);
+  //       final signal = data['signal'] ?? 'hold';
+  //
+  //       // Update the last signal date
+  //       await _secureStorage.write(key: 'last_signal_date', value: DateTime.now().toIso8601String());
+  //
+  //       // Handle the buy signal
+  //       if (signal.toLowerCase() == 'buy') {
+  //         if (balance <= 0) {
+  //           return {
+  //             'checked': true,
+  //             'signal': 'buy',
+  //             'action': 'none',
+  //             'message': 'Buy signal received but insufficient balance. Please load SOL to enable transactions.'
+  //           };
+  //         } else {
+  //           // Execute the swap - BTC token address on Solana
+  //           final btcMint = 'cbbtcf3aa214zXHbiAZQwf4122FBYbraNdFqgw4iMij';
+  //
+  //           // Use our new method to handle the buy signal
+  //           final swapResult = await handleBuySignal(btcMint);
+  //
+  //           if (swapResult['success'] == true) {
+  //             return {
+  //               'checked': true,
+  //               'signal': 'buy',
+  //               'action': 'buy',
+  //               'txSignature': swapResult['signature'],
+  //               'message': 'BUY signal executed: Swapped SOL for BTC'
+  //             };
+  //           } else {
+  //             return {
+  //               'checked': true,
+  //               'signal': 'buy',
+  //               'action': 'none',
+  //               'error': swapResult['error'],
+  //               'message': 'BUY signal received but swap failed: ${swapResult['error']}'
+  //             };
+  //           }
+  //         }
+  //       } else {
+  //         // Hold signal
+  //         return {
+  //           'checked': true,
+  //           'signal': signal.toLowerCase(),
+  //           'action': 'none',
+  //           'message': 'Trading signal received: ${signal.toUpperCase()}'
+  //         };
+  //       }
+  //     } else {
+  //       return {
+  //         'checked': true,
+  //         'error': 'Failed to get prediction signal',
+  //         'message': 'Error checking trading signal'
+  //       };
+  //     }
+  //   } catch (e) {
+  //     debugPrint('Error checking daily trading signal: $e');
+  //     return {
+  //       'checked': true,
+  //       'signal': 'error',
+  //       'action': 'none',
+  //       'error': e.toString(),
+  //       'message': 'Error checking trading signal: $e'
+  //     };
+  //   }
+  // }
 
   Future<bool> shouldCheckTradingSignalToday() async {
     try {

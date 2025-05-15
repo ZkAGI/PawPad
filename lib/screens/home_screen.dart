@@ -9,6 +9,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../services/wallet_storage_service.dart';
 import '../widgets/gradient_card.dart';
+import '../services/signal_scheduler_service.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({Key? key}) : super(key: key);
@@ -22,6 +23,11 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _isLoadingBalance = false;
   double _currentBalance = 0.000;
   List<String> _availableAgents = [];
+  final SignalSchedulerService _schedulerService = SignalSchedulerService();
+
+  Future<void> _checkTradingSignals() async {
+    await _schedulerService.checkSignalsManually(context);
+  }
 
   @override
   void initState() {
@@ -30,7 +36,9 @@ class _HomeScreenState extends State<HomeScreen> {
     // Initialize with first agent and fetch balance
     _initializeSelectedAgent();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _checkDailyTradingSignal();
+      // Initialize the scheduler service
+      _schedulerService.initialize(context);
+      _checkTradingSignals();
     });
   }
 
@@ -125,43 +133,43 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Future<void> _checkDailyTradingSignal() async {
-    final agentProvider = Provider.of<AgentProvider>(context, listen: false);
-
-    // Only check if we have an agent
-    if (!agentProvider.hasAgent) return;
-
-    final result = await agentProvider.checkDailyTradingSignal();
-
-    // If a result was checked and there's a message, show it to the user
-    if (result['checked'] == true && result['message'] != null) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(result['message']),
-            duration: const Duration(seconds: 5),
-            action: result['signal'] == 'buy' && result['action'] == 'none'
-                ? SnackBarAction(
-              label: 'Add Funds',
-              onPressed: () {
-                // Navigate to a screen where the user can add funds
-                // For now just show another message
-                ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Fund addition feature coming soon!'))
-                );
-              },
-            )
-                : null,
-          ),
-        );
-      }
-    }
-
-    // If a buy action was performed, refresh the balance
-    if (result['action'] == 'buy') {
-      _refreshBalance();
-    }
-  }
+  // Future<void> _checkDailyTradingSignal() async {
+  //   final agentProvider = Provider.of<AgentProvider>(context, listen: false);
+  //
+  //   // Only check if we have an agent
+  //   if (!agentProvider.hasAgent) return;
+  //
+  //   final result = await agentProvider.checkDailyTradingSignal();
+  //
+  //   // If a result was checked and there's a message, show it to the user
+  //   if (result['checked'] == true && result['message'] != null) {
+  //     if (mounted) {
+  //       ScaffoldMessenger.of(context).showSnackBar(
+  //         SnackBar(
+  //           content: Text(result['message']),
+  //           duration: const Duration(seconds: 5),
+  //           action: result['signal'] == 'buy' && result['action'] == 'none'
+  //               ? SnackBarAction(
+  //             label: 'Add Funds',
+  //             onPressed: () {
+  //               // Navigate to a screen where the user can add funds
+  //               // For now just show another message
+  //               ScaffoldMessenger.of(context).showSnackBar(
+  //                   const SnackBar(content: Text('Fund addition feature coming soon!'))
+  //               );
+  //             },
+  //           )
+  //               : null,
+  //         ),
+  //       );
+  //     }
+  //   }
+  //
+  //   // If a buy action was performed, refresh the balance
+  //   if (result['action'] == 'buy') {
+  //     _refreshBalance();
+  //   }
+  // }
 
   Future<void> _loadAgents() async {
     print('Loading agents from storage...');
@@ -249,6 +257,76 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+
+  // Add this helper method to _HomeScreenState
+  void _showTradingActivityHistory(BuildContext context, AgentProvider agentProvider) async {
+    final activity = await agentProvider.getTradingActivityHistory();
+
+    if (activity.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No trading activity yet'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Trading Activity History'),
+          content: SizedBox(
+            width: double.maxFinite,
+            height: 300,
+            child: ListView.builder(
+              itemCount: activity.length,
+              itemBuilder: (context, index) {
+                final item = activity[activity.length - 1 - index]; // Show newest first
+
+                // Format timestamp
+                final timestamp = DateTime.parse(item['ts']).toLocal();
+                final formattedDate = '${timestamp.day}/${timestamp.month}/${timestamp.year}';
+                final formattedTime = '${timestamp.hour.toString().padLeft(2, '0')}:${timestamp.minute.toString().padLeft(2, '0')}';
+
+                // Create appropriate display based on activity type
+                String activityText = '';
+                if (item['type'] == 'bitcoin_buy') {
+                  activityText = 'Bitcoin Buy';
+                  if (item['txSignature'] != null) {
+                    activityText += ' - ${item['amount'].toStringAsFixed(4)} SOL';
+                  }
+                } else if (item['type'] == 'autonomous_buy') {
+                  final symbol = item['symbol'] ?? 'Token';
+                  activityText = 'Long $symbol';
+                  if (item['txSignature'] != null) {
+                    activityText += ' - ${item['amount'].toStringAsFixed(4)} SOL';
+                  }
+                }
+
+                return ListTile(
+                  title: Text(activityText),
+                  subtitle: Text('$formattedDate at $formattedTime'),
+                  trailing: item['txSignature'] != null
+                      ? const Icon(Icons.check_circle, color: Colors.green)
+                      : const Icon(Icons.info_outline, color: Colors.orange),
+                );
+              },
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+              child: const Text('Close'),
+            ),
+          ],
+        );
+      },
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -412,6 +490,75 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
             // Banner for new users
+
+            // Add this after the Balance card in your build method
+            // if (agentProvider.hasAgent)
+            //   Padding(
+            //     padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+            //     child: Card(
+            //       elevation: 2,
+            //       child: gradientCard(
+            //         child: Padding(
+            //           padding: const EdgeInsets.all(16.0),
+            //           child: Column(
+            //             crossAxisAlignment: CrossAxisAlignment.start,
+            //             children: [
+            //               Row(
+            //                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            //                 children: [
+            //                   const Text(
+            //                     'Trading Status',
+            //                     style: TextStyle(
+            //                       fontSize: 20,
+            //                       fontWeight: FontWeight.bold,
+            //                       color: Colors.white,
+            //                     ),
+            //                   ),
+            //                   IconButton(
+            //                     icon: const Icon(Icons.history, size: 20),
+            //                     onPressed: () => _showTradingActivityHistory(context, agentProvider),
+            //                     tooltip: 'View trading history',
+            //                   ),
+            //                 ],
+            //               ),
+            //               const SizedBox(height: 12),
+            //               Row(
+            //                 children: [
+            //                   Expanded(
+            //                     child: _buildStatusItem(
+            //                       icon: Icons.currency_bitcoin,
+            //                       title: 'Bitcoin Buy & Hold',
+            //                       isActive: true,
+            //                       nextCheck: 'Daily at 3 PM IST',
+            //                     ),
+            //                   ),
+            //                   const SizedBox(width: 8),
+            //                   Expanded(
+            //                     child: _buildStatusItem(
+            //                       icon: Icons.trending_up,
+            //                       title: 'Autonomous Trading',
+            //                       isActive: true,
+            //                       nextCheck: 'Every 6 hours',
+            //                     ),
+            //                   ),
+            //                 ],
+            //               ),
+            //               const SizedBox(height: 12),
+            //               OutlinedButton(
+            //                 onPressed: () => _checkTradingSignals(),
+            //                 style: OutlinedButton.styleFrom(
+            //                   side: const BorderSide(color: Colors.white),
+            //                   minimumSize: const Size(double.infinity, 36),
+            //                 ),
+            //                 child: const Text('Check Signals Now', style: TextStyle(color: Colors.white)),
+            //               ),
+            //             ],
+            //           ),
+            //         ),
+            //       ),
+            //     ),
+            //   ),
+            
             if (!agentProvider.hasAgent) _buildNoAgentBanner(context),
 
             if (agentProvider.hasAgent)
@@ -529,6 +676,76 @@ class _HomeScreenState extends State<HomeScreen> {
 
   // Modal for creating a new agent - no changes needed
 // Inside _HomeScreenState class
+
+  // Helper widget for trading status items
+  Widget _buildStatusItem({
+    required IconData icon,
+    required String title,
+    required bool isActive,
+    required String nextCheck,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(icon, size: 16, color: Colors.white),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Row(
+            children: [
+              Container(
+                width: 8,
+                height: 8,
+                decoration: BoxDecoration(
+                  color: isActive ? Colors.green : Colors.grey,
+                  shape: BoxShape.circle,
+                ),
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  isActive ? 'Active' : 'Inactive',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: isActive ? Colors.green : Colors.grey,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            nextCheck,
+            style: const TextStyle(
+              fontSize: 11,
+              color: Colors.white70,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _showCreateAgentModal(BuildContext context) {
     showModalBottomSheet<String>(
       context: context,
@@ -601,10 +818,18 @@ class _CreateAgentFormState extends State<CreateAgentForm> {
   }
 
   Future<void> _createAgentAndRecord() async {
+    if (_bitcoinBuyAndHold || _autonomousTrading) {
+      // Initialize the scheduler service to start checking signals for the new agent
+      final schedulerService = SignalSchedulerService();
+      schedulerService.initialize(context);
+    }
+
     if (_formKey.currentState!.validate()) {
       setState(() {
         _isLoading = true;
       });
+
+
 
       bool needsBalanceWarning = false;
 
