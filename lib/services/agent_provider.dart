@@ -491,65 +491,7 @@ class AgentProvider extends ChangeNotifier {
       return true;
     }
   }
-
-  // Future<Map<String, dynamic>> handleBuySignal(String tokenMint) async {
-  //   if (_agentName == null) {
-  //     return {
-  //       'success': false,
-  //       'error': 'No agent selected',
-  //     };
-  //   }
-  //
-  //   try {
-  //     debugPrint("Handling buy signal for token: $tokenMint");
-  //
-  //     // Get the wallet directly
-  //     final wallet = await getOrCreateWallet();
-  //     final publicKey = wallet.address;
-  //
-  //     // Extract secret key directly from wallet
-  //     final extracted = await wallet.extract();
-  //     // Make sure it's a Uint8List
-  //     final secretKey = Uint8List.fromList(extracted.bytes);
-  //
-  //     debugPrint("Secret key length: ${secretKey.length} bytes");
-  //
-  //     // Get the balance
-  //     final balance = await getBalance();
-  //     debugPrint("Current balance: $balance SOL");
-  //
-  //     if (balance <= 0.005) {
-  //       return {
-  //         'success': false,
-  //         'error': 'Insufficient balance. Minimum 0.005 SOL required.',
-  //       };
-  //     }
-  //
-  //     // Execute the swap using the SolanaSwapService
-  //     final result = await _solanaSwapService.executeSwap(
-  //       publicKey: publicKey,
-  //       secretKey: secretKey,
-  //       outputMint: tokenMint,
-  //       solBalance: balance,
-  //     );
-  //
-  //     // If successful, update the balance
-  //     if (result['success'] == true) {
-  //       debugPrint("Swap successful: ${result['signature']}");
-  //       await getAgentBalance(_agentName!);
-  //     } else {
-  //       debugPrint("Swap failed: ${result['error']}");
-  //     }
-  //
-  //     return result;
-  //   } catch (e) {
-  //     debugPrint('Error handling buy signal: $e');
-  //     return {
-  //       'success': false,
-  //       'error': 'Swap failed: $e',
-  //     };
-  //   }
-  // }
+  
   Future<Map<String, dynamic>> handleBuySignal(String tokenMint) async {
     if (_agentName == null) {
       return {
