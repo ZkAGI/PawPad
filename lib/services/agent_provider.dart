@@ -571,6 +571,24 @@ class AgentProvider extends ChangeNotifier {
                 'takeProfit': signalData['Take Profit'],
               });
 
+              // Create activity data with strategy-specific information
+              final activityData = {
+                'ts': now.toIso8601String(),
+                'txSignature': swapResult['signature'],
+                'amount': swapResult['amount'],
+                'symbol': tradingSymbol,
+                'outputMint': outputMint,
+                'signal': signalType,
+                'entryPrice': signalData['Entry Price'],
+                'stopLoss': signalData['Stop Loss'],
+                'takeProfit': signalData['Take Profit'],
+                'action': 'buy',
+                'timeframe': timeframe,
+              };
+
+              // Record transaction in activity log and send to API
+              await recordTradingActivity('custom_strategy_buy', activityData);
+
               return {
                 'type': 'custom_strategy',
                 'signal': 'long',
@@ -760,6 +778,18 @@ class AgentProvider extends ChangeNotifier {
                 'amount': swapResult['amount'],
               });
 
+              // Create activity data
+              final activityData = {
+                'ts': now.toIso8601String(),
+                'txSignature': swapResult['signature'],
+                'amount': swapResult['amount'],
+                'action': 'buy',
+                'symbol': 'BTC',
+              };
+
+              // Record transaction in activity log and send to API
+              await recordTradingActivity('bitcoin_buy', activityData);
+
               return {
                 'type': 'bitcoin',
                 'signal': 'buy',
@@ -854,6 +884,20 @@ class AgentProvider extends ChangeNotifier {
                 'signal': signalType,
                 'entryPrice': signalData['Entry Price'],
               });
+              // Create activity data with more detailed information
+              final activityData = {
+                'ts': now.toIso8601String(),
+                'txSignature': swapResult['signature'],
+                'amount': swapResult['amount'],
+                'symbol': tradingSymbol,
+                'outputMint': outputMint,
+                'signal': signalType,
+                'entryPrice': signalData['Entry Price'],
+                'action': 'buy',
+              };
+
+              // Record transaction in activity log and send to API
+              await recordTradingActivity('autonomous_buy', activityData);
 
               return {
                 'type': 'autonomous',
@@ -939,11 +983,54 @@ class AgentProvider extends ChangeNotifier {
         );
       }
 
+      // Send the activity to the API
+      await sendActivityToApi(newActivity);
+
       debugPrint('Recorded trading activity: $activityType');
     } catch (e) {
       debugPrint('Error recording trading activity: $e');
     }
   }
+//   Future<void> recordTradingActivity(String activityType, Map<String, dynamic> activityData) async {
+//     try {
+//       if (_agentName == null) return;
+//
+//       // Get existing activity or initialize new array
+//       final activityStr = await _secureStorage.read(key: '${_agentName}_activity');
+//       List<dynamic> activity = [];
+//
+//       if (activityStr != null) {
+//         activity = jsonDecode(activityStr);
+//       }
+//
+//       // Add new activity with type
+//       final newActivity = {
+//         'type': activityType,
+//         ...activityData,
+//       };
+//
+//       activity.add(newActivity);
+//
+//       // Store updated activity
+//       await _secureStorage.write(
+//         key: '${_agentName}_activity',
+//         value: jsonEncode(activity),
+//       );
+//
+//       // Limit stored activity to last 50 entries to prevent excessive storage
+//       if (activity.length > 50) {
+//         activity = activity.sublist(activity.length - 50);
+//         await _secureStorage.write(
+//           key: '${_agentName}_activity',
+//           value: jsonEncode(activity),
+//         );
+//       }
+//
+//       debugPrint('Recorded trading activity: $activityType');
+//     } catch (e) {
+//       debugPrint('Error recording trading activity: $e');
+//     }
+//   }
 
 // Get trading activity history
   Future<List<Map<String, dynamic>>> getTradingActivityHistory() async {
@@ -1101,6 +1188,45 @@ class AgentProvider extends ChangeNotifier {
         'success': false,
         'error': 'Swap failed: $e',
       };
+    }
+  }
+
+  Future<bool> sendActivityToApi(Map<String, dynamic> activity) async {
+    try {
+      if (_agentName == null) {
+        debugPrint('Cannot send activity to API: No agent selected');
+        return false;
+      }
+
+      // Prepare the request body
+      final requestBody = {
+        'ticker': _agentName,
+        'payload': activity
+      };
+
+      debugPrint('Sending activity to API: ${jsonEncode(requestBody)}');
+
+      // Make the API call
+      final response = await http.post(
+        Uri.parse('https://zynapse.zkagi.ai/append_activity'),
+        headers: {
+          'Content-Type': 'application/json',
+          'api-key': 'zk-123321',
+        },
+        body: jsonEncode(requestBody),
+      );
+
+      // Check the response
+      if (response.statusCode == 200) {
+        debugPrint('Activity successfully sent to API');
+        return true;
+      } else {
+        debugPrint('Failed to send activity to API: ${response.statusCode} - ${response.body}');
+        return false;
+      }
+    } catch (e) {
+      debugPrint('Error sending activity to API: $e');
+      return false;
     }
   }
 }
