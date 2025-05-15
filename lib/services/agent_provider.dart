@@ -424,14 +424,198 @@ class AgentProvider extends ChangeNotifier {
       final lastSignalDate = DateTime.parse(lastSignalDateStr);
       final now = DateTime.now();
 
-      // Check if 6 hours have passed since the last check
+      // Check if 12 hours have passed since the last check
       final hoursSinceLastCheck = now.difference(lastSignalDate).inHours;
 
-      return hoursSinceLastCheck >= 6;
+      return hoursSinceLastCheck >= 12;
     } catch (e) {
       debugPrint('Error checking if should request autonomous trading signal: $e');
       // Default to true if there's an error
       return true;
+    }
+  }
+
+  // Add this method for custom strategy checks every 6 hours
+  Future<bool> shouldCheckCustomStrategySignal() async {
+    try {
+      // Get the last custom strategy signal date
+      final lastSignalDateStr = await _secureStorage.read(key: 'last_custom_strategy_signal_date');
+
+      if (lastSignalDateStr == null) {
+        // No previous signal, should check
+        return true;
+      }
+
+      final lastSignalDate = DateTime.parse(lastSignalDateStr);
+      final now = DateTime.now();
+
+      // Check if 8 hours have passed since the last check
+      final hoursSinceLastCheck = now.difference(lastSignalDate).inHours;
+
+      return hoursSinceLastCheck >= 8;
+    } catch (e) {
+      debugPrint('Error checking if should request custom strategy signal: $e');
+      // Default to true if there's an error
+      return true;
+    }
+  }
+
+  // Check Custom Strategy signal
+  Future<Map<String, dynamic>> checkCustomStrategySignal(double balance) async {
+    try {
+      // First, check if agent name exists
+      if (_agentName == null) {
+        return {
+          'type': 'custom_strategy',
+          'error': 'No agent selected',
+          'message': 'Error checking custom strategy signal: No agent selected'
+        };
+      }
+
+      // Fetch current custom strategy settings from server
+      final response = await http.get(
+        Uri.parse('https://zynapse.zkagi.ai/activities/${_agentName}'),
+        headers: {
+          'api-key': 'zk-123321',
+        },
+      );
+
+      if (response.statusCode != 200) {
+        debugPrint('Error fetching agent activities: ${response.body}');
+        return {
+          'type': 'custom_strategy',
+          'error': 'Failed to fetch agent activities',
+          'message': 'Error checking custom strategy signal: Failed to fetch agent data'
+        };
+      }
+
+      final activityData = jsonDecode(response.body);
+
+      // Extract custom strategy settings
+      if (activityData['isCustomStrategy'] == null) {
+        debugPrint('No custom strategy settings found for agent: ${_agentName}');
+        return {
+          'type': 'custom_strategy',
+          'error': 'No custom strategy settings',
+          'message': 'No custom strategy settings found for this agent'
+        };
+      }
+
+      final customStrategy = activityData['isCustomStrategy'];
+      final symbols = List<String>.from(customStrategy['coins'] ?? []);
+      final timeframe = customStrategy['timeframe'] as String?;
+
+      if (symbols.isEmpty || timeframe == null) {
+        debugPrint('Invalid custom strategy settings: symbols=$symbols, timeframe=$timeframe');
+        return {
+          'type': 'custom_strategy',
+          'error': 'Invalid custom strategy settings',
+          'message': 'Custom strategy settings are incomplete'
+        };
+      }
+
+      debugPrint('Using custom strategy settings: symbols=$symbols, timeframe=$timeframe');
+
+      // Call the custom strategy API to get signal
+      final requestBody = {
+        "symbols": symbols,
+        "timeframe": timeframe
+      };
+
+      final signalResponse = await http.post(
+        Uri.parse('http://164.52.202.62:6000/get-signal'),
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode(requestBody),
+      );
+
+      // Update the last signal date for custom strategy
+      final now = DateTime.now();
+      await _secureStorage.write(
+          key: 'last_custom_strategy_signal_date', value: now.toIso8601String());
+
+      if (signalResponse.statusCode == 200) {
+        final signalData = jsonDecode(signalResponse.body);
+
+        // Extract output mint and signal from response
+        final outputMint = signalData['Output Mint'] as String?;
+        final tradingSymbol = signalData['Symbol'] as String?;
+        final signalType = signalData['Signal'] as String?;
+
+        // Process signal if it's a Long signal and we have an output mint
+        if (outputMint != null && signalType != null && signalType.contains('Long')) {
+          if (balance <= 0.01) {
+            return {
+              'type': 'custom_strategy',
+              'signal': 'long',
+              'symbol': tradingSymbol,
+              'action': 'none',
+              'message': 'Long signal received for $tradingSymbol but insufficient balance. Please load SOL to enable transactions.'
+            };
+          } else {
+            // Execute the swap with the output mint from the signal
+            final swapResult = await handleBuySignal(outputMint);
+
+            if (swapResult['success'] == true) {
+              // Record transaction in activity log
+              await recordTradingActivity('custom_strategy_buy', {
+                'ts': now.toIso8601String(),
+                'txSignature': swapResult['signature'],
+                'amount': swapResult['amount'],
+                'symbol': tradingSymbol,
+                'outputMint': outputMint,
+                'signal': signalType,
+                'entryPrice': signalData['Entry Price'],
+                'stopLoss': signalData['Stop Loss'],
+                'takeProfit': signalData['Take Profit'],
+              });
+
+              return {
+                'type': 'custom_strategy',
+                'signal': 'long',
+                'action': 'buy',
+                'symbol': tradingSymbol,
+                'txSignature': swapResult['signature'],
+                'message': 'LONG signal executed: Swapped SOL for $tradingSymbol'
+              };
+            } else {
+              return {
+                'type': 'custom_strategy',
+                'signal': 'long',
+                'action': 'none',
+                'symbol': tradingSymbol,
+                'error': swapResult['error'],
+                'message': 'LONG signal received but swap failed: ${swapResult['error']}'
+              };
+            }
+          }
+        } else {
+          // Not a Long signal or missing output mint
+          return {
+            'type': 'custom_strategy',
+            'signal': signalType?.toLowerCase() ?? 'unknown',
+            'symbol': tradingSymbol,
+            'action': 'none',
+            'message': 'Signal received: ${signalType ?? "Unknown"} for ${tradingSymbol ?? "Unknown"} - No action required'
+          };
+        }
+      } else {
+        return {
+          'type': 'custom_strategy',
+          'error': 'Failed to get custom strategy signal',
+          'message': 'Error checking custom strategy signal'
+        };
+      }
+    } catch (e) {
+      debugPrint('Error checking custom strategy signal: $e');
+      return {
+        'type': 'custom_strategy',
+        'signal': 'error',
+        'action': 'none',
+        'error': e.toString(),
+        'message': 'Error checking custom strategy signal: $e'
+      };
     }
   }
 
@@ -445,6 +629,7 @@ class AgentProvider extends ChangeNotifier {
       // Check if Bitcoin Buy & Hold is enabled for the current agent
       final bitcoinBuyAndHold = await _secureStorage.read(key: 'bitcoin_buy_and_hold') == 'true';
       final autonomousTrading = await _secureStorage.read(key: 'autonomous_trading') == 'true';
+      final customStrategyEnabled = await _secureStorage.read(key: 'last_custom_strategy_signal_date') != null;
 
       // Get the balance using your existing method
       final balance = await getBalance();
@@ -490,6 +675,31 @@ class AgentProvider extends ChangeNotifier {
               result['message'] += ' ';
             }
             result['message'] += 'Long signal received but insufficient balance.';
+          }
+        }
+      }
+
+      if (customStrategyEnabled) {
+        final shouldCheckCustom = await shouldCheckCustomStrategySignal();
+
+        if (shouldCheckCustom) {
+          final customResult = await checkCustomStrategySignal(balance);
+          result['signals'].add(customResult);
+
+          // Add message for custom strategy signal if needed
+          if (customResult['action'] == 'buy') {
+            result['message'] = result['message'] ?? '';
+            if (result['message'].isNotEmpty) {
+              result['message'] += ' ';
+            }
+            final symbol = customResult['symbol'] ?? 'token';
+            result['message'] += 'Custom strategy: Long signal for $symbol executed successfully!';
+          } else if (customResult['signal'] == 'long' && customResult['action'] == 'none') {
+            result['message'] = result['message'] ?? '';
+            if (result['message'].isNotEmpty) {
+              result['message'] += ' ';
+            }
+            result['message'] += 'Custom strategy: Long signal received but insufficient balance.';
           }
         }
       }
@@ -750,100 +960,6 @@ class AgentProvider extends ChangeNotifier {
       return [];
     }
   }
-  // Future<Map<String, dynamic>> checkDailyTradingSignal() async {
-  //   if (_agentName == null) {
-  //     return {'checked': false, 'message': 'No agent selected'};
-  //   }
-  //
-  //   try {
-  //     // Check if we should get a signal today using your existing method
-  //     final shouldCheck = await shouldCheckTradingSignalToday();
-  //
-  //     if (!shouldCheck) {
-  //       return {'checked': false, 'message': 'Already checked trading signal today'};
-  //     }
-  //
-  //     // Check if Bitcoin Buy & Hold is enabled for the current agent
-  //     final bitcoinBuyAndHold = await _secureStorage.read(key: 'bitcoin_buy_and_hold') == 'true';
-  //
-  //     if (!bitcoinBuyAndHold) {
-  //       return {'checked': false, 'message': 'Bitcoin Buy & Hold not enabled for this agent'};
-  //     }
-  //
-  //     // Get the balance using your existing method
-  //     final balance = await getBalance();
-  //
-  //     // Get the trading signal
-  //     final response = await http.get(Uri.parse('http://103.231.86.182:3020/predict'));
-  //
-  //     if (response.statusCode == 200) {
-  //       final data = jsonDecode(response.body);
-  //       final signal = data['signal'] ?? 'hold';
-  //
-  //       // Update the last signal date
-  //       await _secureStorage.write(key: 'last_signal_date', value: DateTime.now().toIso8601String());
-  //
-  //       // Handle the buy signal
-  //       if (signal.toLowerCase() == 'buy') {
-  //         if (balance <= 0) {
-  //           return {
-  //             'checked': true,
-  //             'signal': 'buy',
-  //             'action': 'none',
-  //             'message': 'Buy signal received but insufficient balance. Please load SOL to enable transactions.'
-  //           };
-  //         } else {
-  //           // Execute the swap - BTC token address on Solana
-  //           final btcMint = 'cbbtcf3aa214zXHbiAZQwf4122FBYbraNdFqgw4iMij';
-  //
-  //           // Use our new method to handle the buy signal
-  //           final swapResult = await handleBuySignal(btcMint);
-  //
-  //           if (swapResult['success'] == true) {
-  //             return {
-  //               'checked': true,
-  //               'signal': 'buy',
-  //               'action': 'buy',
-  //               'txSignature': swapResult['signature'],
-  //               'message': 'BUY signal executed: Swapped SOL for BTC'
-  //             };
-  //           } else {
-  //             return {
-  //               'checked': true,
-  //               'signal': 'buy',
-  //               'action': 'none',
-  //               'error': swapResult['error'],
-  //               'message': 'BUY signal received but swap failed: ${swapResult['error']}'
-  //             };
-  //           }
-  //         }
-  //       } else {
-  //         // Hold signal
-  //         return {
-  //           'checked': true,
-  //           'signal': signal.toLowerCase(),
-  //           'action': 'none',
-  //           'message': 'Trading signal received: ${signal.toUpperCase()}'
-  //         };
-  //       }
-  //     } else {
-  //       return {
-  //         'checked': true,
-  //         'error': 'Failed to get prediction signal',
-  //         'message': 'Error checking trading signal'
-  //       };
-  //     }
-  //   } catch (e) {
-  //     debugPrint('Error checking daily trading signal: $e');
-  //     return {
-  //       'checked': true,
-  //       'signal': 'error',
-  //       'action': 'none',
-  //       'error': e.toString(),
-  //       'message': 'Error checking trading signal: $e'
-  //     };
-  //   }
-  // }
 
   Future<bool> shouldCheckTradingSignalToday() async {
     try {

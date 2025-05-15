@@ -13,6 +13,7 @@ import '../services/signal_scheduler_service.dart';
 import '../widgets/trending_agents_list.dart';
 import '../widgets/vertical_trending_agents.dart';
 import '../services/agent_pnl_tracking_provider.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 
 class HomeScreen extends StatefulWidget {
@@ -769,6 +770,7 @@ class _CreateAgentFormState extends State<CreateAgentForm> {
   bool _showCustomTrading = false;
   Set<String> _selectedCoins = {};
   String? _selectedTimeframe;
+  final FlutterSecureStorage _secureStorage = const FlutterSecureStorage();
 
 // List of available coins
   final List<String> _availableCoins = [
@@ -792,6 +794,62 @@ class _CreateAgentFormState extends State<CreateAgentForm> {
 // List of available timeframes
   final List<String> _availableTimeframes = ["1h", "4h", "1d"];
 
+  Future<void> _getCustomTradingSignal() async {
+    if (_selectedCoins.isEmpty || _selectedTimeframe == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please select both coins and a timeframe'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    try {
+      // Prepare the request body
+      final requestBody = {
+        "symbols": _selectedCoins.toList(),
+        "timeframe": _selectedTimeframe
+      };
+
+      print('Sending custom trading request: ${jsonEncode(requestBody)}');
+
+      // Make the API call
+      final response = await http.post(
+        Uri.parse('http://164.52.202.62:6000/get-signal'),
+        headers: {"Content-Type": "application/json"},
+        body: jsonEncode(requestBody),
+      );
+
+      // Process the response
+      if (response.statusCode == 200) {
+        final responseData = jsonDecode(response.body);
+        print('API Response: $responseData');
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Signal received successfully!'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to get signal: ${response.statusCode}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
   @override
   void dispose() {
     _nameController.dispose();
@@ -810,7 +868,7 @@ class _CreateAgentFormState extends State<CreateAgentForm> {
   }
 
   Future<void> _createAgentAndRecord() async {
-    if (_bitcoinBuyAndHold || _autonomousTrading) {
+    if (_bitcoinBuyAndHold || _autonomousTrading || (_showCustomTrading && _selectedCoins.isNotEmpty && _selectedTimeframe != null)) {
       // Initialize the scheduler service to start checking signals for the new agent
       final schedulerService = SignalSchedulerService();
       schedulerService.initialize(context);
@@ -1084,8 +1142,22 @@ class _CreateAgentFormState extends State<CreateAgentForm> {
           }
         }
 
+        // Process custom trading if enabled
+        Map<String, dynamic>? customStrategyData;
         // Handle custom trading signals if selections are made
+
+
         if (_showCustomTrading && _selectedCoins.isNotEmpty && _selectedTimeframe != null) {
+          // Save custom strategy data for API request
+          customStrategyData = {
+            "coins": _selectedCoins.toList(),
+            "timeframe": _selectedTimeframe
+          };
+
+          // Store the last signal date to enable periodic checks
+          final now = DateTime.now();
+          await _secureStorage.write(
+              key: 'last_custom_strategy_signal_date', value: now.toIso8601String());
           try {
             final requestBody = {
               "symbols": _selectedCoins.toList(),
@@ -1105,17 +1177,99 @@ class _CreateAgentFormState extends State<CreateAgentForm> {
               final signalData = jsonDecode(response.body);
               print('Custom trading signal received: $signalData');
 
-              // You can process the signal here and add to activity array if needed
+              // Extract the Output Mint and Signal from the response
+              final outputMint = signalData['Output Mint'] as String?;
+              final tradingSignal = signalData['Signal'] as String?;
+
+              // Add the signal information to the activity log
               activity.add({
-                'action': 'custom_trading_setup',
+                'action': 'custom_trading_signal',
                 'ts': DateTime.now().toIso8601String(),
                 'symbols': _selectedCoins.toList(),
                 'timeframe': _selectedTimeframe,
-                'response': response.body,
+                'symbol': signalData['Symbol'],
+                'signal': tradingSignal,
+                'entry_price': signalData['Entry Price'],
+                'stop_loss': signalData['Stop Loss'],
+                'take_profit': signalData['Take Profit'],
               });
+
+              // If we have a valid output mint and the signal contains "Long", perform the buy action
+              if (outputMint != null && tradingSignal != null && tradingSignal.contains('Long')) {
+                print('Processing Long signal for token mint: $outputMint');
+
+                // Get the current balance to check if we can proceed
+                final currentBalance = await agentProvider.getBalance();
+                print('Current balance: $currentBalance SOL');
+
+                if (currentBalance < 0.01) {
+                  // Cannot perform buy action due to insufficient balance
+                  print('Cannot perform buy action: Insufficient balance (${currentBalance} SOL)');
+                  activity.add({
+                    'action': 'custom_trading_buy_failed',
+                    'ts': DateTime.now().toIso8601String(),
+                    'note': 'Insufficient balance to perform swap action'
+                  });
+
+                  // Mark as needing balance warning
+                  needsBalanceWarning = true;
+                } else {
+                  try {
+                    // Execute the buy transaction with the output mint from the signal
+                    final swapResult = await agentProvider.handleBuySignal(outputMint);
+
+                    if (swapResult['success'] == true) {
+                      // Swap was successful
+                      activity.add({
+                        'action': 'custom_trading_buy',
+                        'ts': DateTime.now().toIso8601String(),
+                        'txSignature': swapResult['signature'],
+                        'amount': swapResult['amount'],
+                        'symbol': signalData['Symbol'],
+                        'entry_price': signalData['Entry Price'],
+                        'output_mint': outputMint,
+                      });
+
+                      print('Custom trading swap successful! Transaction signature: ${swapResult['signature']}');
+                    } else {
+                      // Swap failed
+                      activity.add({
+                        'action': 'custom_trading_buy_failed',
+                        'ts': DateTime.now().toIso8601String(),
+                        'note': 'Swap failed: ${swapResult['error']}'
+                      });
+
+                      needsBalanceWarning = true;
+                      print('Custom trading swap failed: ${swapResult['error']}');
+                    }
+                  } catch (e) {
+                    print('Error executing custom trading swap: $e');
+                    activity.add({
+                      'action': 'custom_trading_buy_failed',
+                      'ts': DateTime.now().toIso8601String(),
+                      'note': 'Swap error: $e'
+                    });
+
+                    needsBalanceWarning = true;
+                  }
+                }
+              } else {
+                // Not a Long signal or missing output mint
+                print('Signal not processed for custom trading: ${tradingSignal ?? "Unknown"} - Output Mint: ${outputMint ?? "Not provided"}');
+                activity.add({
+                  'action': 'custom_trading_no_action',
+                  'ts': DateTime.now().toIso8601String(),
+                  'note': 'Signal did not require a buy action or missing output mint'
+                });
+              }
             }
           } catch (e) {
             print('Error setting up custom trading: $e');
+            activity.add({
+              'action': 'custom_trading_error',
+              'ts': DateTime.now().toIso8601String(),
+              'note': 'Error: $e'
+            });
           }
         }
 
@@ -1126,6 +1280,7 @@ class _CreateAgentFormState extends State<CreateAgentForm> {
           'isFutureAndOptions': _autonomousTrading,
           'isBuyAndHold': _bitcoinBuyAndHold,
           'activity': activity,
+          if (customStrategyData != null) 'isCustomStrategy': customStrategyData,
         };
 
         print('Request data: ${jsonEncode(requestData)}');
@@ -1466,6 +1621,8 @@ class _CreateAgentFormState extends State<CreateAgentForm> {
 }
 
 // Add this method to _CreateAgentFormState
+
+
 void _showInsufficientBalanceDialogAfterCreation(BuildContext context, String signal) {
   showDialog(
     context: context,
