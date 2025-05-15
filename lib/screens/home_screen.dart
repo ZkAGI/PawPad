@@ -1072,7 +1072,7 @@ class _CreateAgentFormState extends State<CreateAgentForm> {
           try {
             // Call the prediction API to get trading signal
             final predictionResponse = await http.get(
-              Uri.parse('http://103.231.86.182:3020/predict'),
+              Uri.parse('https://zynapse.zkagi.ai/v1/predictbtc'),
             );
             //
             print('Prediction API status code: ${predictionResponse.statusCode}');

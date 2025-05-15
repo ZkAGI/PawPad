@@ -697,7 +697,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       textAlign: TextAlign.center,
                     ),
                   ),
-                  
+
                 ],
               ),
             ),
