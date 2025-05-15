@@ -651,6 +651,9 @@ class _CreateAgentFormState extends State<CreateAgentForm> {
             print('Signal API response: ${signalResponse.body}');
 
             if (signalResponse.statusCode == 200) {
+              // Parse the response to extract signal details
+              final signalData = jsonDecode(signalResponse.body);
+
               // Add the signal response to activity for tracking
               activity.add({
                 'action': 'signal_received',
@@ -659,6 +662,78 @@ class _CreateAgentFormState extends State<CreateAgentForm> {
               });
 
               print('Signal received from autonomous trading API');
+
+              // Extract output mint and signal from response
+              final outputMint = signalData['Output Mint'] as String?;
+              final tradingSignal = signalData['Signal'] as String?;
+
+              // If we have a valid output mint and the signal contains "Long"
+              if (outputMint != null && tradingSignal != null && tradingSignal.contains('Long')) {
+                print('Processing Long signal for token mint: $outputMint');
+
+                // Attempt to execute the buy transaction
+                try {
+                  // Get the current balance to check if we can proceed
+                  final currentBalance = await agentProvider.getBalance();
+                  print('Current balance: $currentBalance SOL');
+
+                  if (currentBalance < 0.01) {
+                    // Cannot perform buy action due to insufficient balance
+                    print('Cannot perform buy action: Insufficient balance (${currentBalance} SOL)');
+                    activity.add({
+                      'action': 'buy_failed',
+                      'ts': DateTime.now().toIso8601String(),
+                      'note': 'Insufficient balance to perform swap action'
+                    });
+
+                    needsBalanceWarning = true;
+                  } else {
+                    // Execute the buy transaction with the output mint
+                    final swapResult = await agentProvider.handleBuySignal(outputMint);
+
+                    if (swapResult['success'] == true) {
+                      // Swap was successful
+                      activity.add({
+                        'action': 'buy',
+                        'ts': DateTime.now().toIso8601String(),
+                        'txSignature': swapResult['signature'],
+                        'amount': swapResult['amount'],
+                        'symbol': signalData['Symbol'],
+                        'entry_price': signalData['Entry Price'],
+                      });
+
+                      print('Autonomous trading swap successful! Transaction signature: ${swapResult['signature']}');
+                    } else {
+                      // Swap failed
+                      activity.add({
+                        'action': 'buy_failed',
+                        'ts': DateTime.now().toIso8601String(),
+                        'note': 'Swap failed: ${swapResult['error']}'
+                      });
+
+                      needsBalanceWarning = true;
+                      print('Autonomous trading swap failed: ${swapResult['error']}');
+                    }
+                  }
+                } catch (e) {
+                  print('Error executing autonomous trading swap: $e');
+                  activity.add({
+                    'action': 'buy_failed',
+                    'ts': DateTime.now().toIso8601String(),
+                    'note': 'Swap error: $e'
+                  });
+
+                  needsBalanceWarning = true;
+                }
+              } else {
+                // Not a Long signal or missing output mint
+                print('Signal not processed: ${tradingSignal ?? "Unknown"} - Output Mint: ${outputMint ?? "Not provided"}');
+                activity.add({
+                  'action': 'signal_no_action',
+                  'ts': DateTime.now().toIso8601String(),
+                  'note': 'Signal did not require a buy action'
+                });
+              }
             } else {
               print('Failed to get signal from API');
               activity.add({
@@ -676,6 +751,48 @@ class _CreateAgentFormState extends State<CreateAgentForm> {
             });
           }
         }
+        // if (_autonomousTrading) {
+        //   print('Autonomous Trading is enabled - calling get-signal API...');
+        //
+        //   try {
+        //     // Call the get-signal API with POST request and empty body
+        //     final signalResponse = await http.post(
+        //       Uri.parse('http://164.52.202.62:9000/get-signal'),
+        //       headers: {
+        //         'Content-Type': 'application/json',
+        //       },
+        //       body: '{}',
+        //     );
+        //
+        //     print('Signal API status code: ${signalResponse.statusCode}');
+        //     print('Signal API response: ${signalResponse.body}');
+        //
+        //     if (signalResponse.statusCode == 200) {
+        //       // Add the signal response to activity for tracking
+        //       activity.add({
+        //         'action': 'signal_received',
+        //         'ts': DateTime.now().toIso8601String(),
+        //         'response': signalResponse.body,
+        //       });
+        //
+        //       print('Signal received from autonomous trading API');
+        //     } else {
+        //       print('Failed to get signal from API');
+        //       activity.add({
+        //         'action': 'signal_failed',
+        //         'ts': DateTime.now().toIso8601String(),
+        //         'note': 'Failed to get signal: Status ${signalResponse.statusCode}'
+        //       });
+        //     }
+        //   } catch (e) {
+        //     print('Error calling get-signal API: $e');
+        //     activity.add({
+        //       'action': 'signal_error',
+        //       'ts': DateTime.now().toIso8601String(),
+        //       'note': 'Error: $e'
+        //     });
+        //   }
+        // }
 
 
         // Step 3: If Bitcoin Buy & Hold is enabled, check the trading signal

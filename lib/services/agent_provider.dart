@@ -491,7 +491,7 @@ class AgentProvider extends ChangeNotifier {
       return true;
     }
   }
-  
+
   Future<Map<String, dynamic>> handleBuySignal(String tokenMint) async {
     if (_agentName == null) {
       return {
