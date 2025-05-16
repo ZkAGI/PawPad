@@ -131,9 +131,6 @@ Custom Strategy: Specialized models for selected tokens and timeframes
 - Project Pitch Deck
 - Prototype
 
-### 📄 License
-This project is licensed under the MIT License - see the LICENSE file for details.
-
 ### 🙏 Acknowledgements
 
 - Solana Foundation for their support and resources
