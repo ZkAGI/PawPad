@@ -1,16 +1,138 @@
-# solana_hackathon_2025
+# 🐾 PawPad
 
-A new Flutter project.
+![image](https://github.com/user-attachments/assets/94e0746c-3a81-4df9-aab3-5cc585fc2f96)
 
-## Getting Started
 
-This project is a starting point for a Flutter application.
+[![Flutter](https://img.shields.io/badge/Flutter-3.16.0-blue.svg)](https://flutter.dev/)
+[![Solana](https://img.shields.io/badge/Solana-Mainnet-green.svg)](https://solana.com/)
+[![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-A few resources to get you started if this is your first Flutter project:
+## 📱 Autonomous Trading Agents on Solana
 
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
+PawPad is a mobile application built on Flutter that enables users to create autonomous trading agents on the Solana blockchain. These AI-powered agents can perform trades automatically based on market signals, custom strategies, and predictive models.
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+**🏆 Hackathon Submission for [Solana Breakthrough 2025_by_colosseum]**
+
+## ✨ Features
+
+* **🤖 Autonomous Trading Agents:** Create personalized trading agents that operate 24/7
+* **👛 Automated Wallet Creation:** Secure Solana wallet generated for each agent
+* **📊 Smart Trading Decisions:** AI-powered market analysis for buy/hold signals
+* **⚙️ Custom Trading Strategies:** Select specific coins and timeframes for your agent to trade
+* **🔄 Cross-Chain Swaps:** Exchange SOL for tokens across multiple chains
+* **📈 Portfolio Management:** Monitor your agent's performance and holdings
+* **🛡️ Trading Limits:** Set daily limits to control your agent's trading activity
+* **🔬 Strategy Adaptation:** Update trading parameters based on market conditions
+
+## 🖼️ Screenshots
+<img width="189" alt="image" src="https://github.com/user-attachments/assets/0ed2f145-ec9b-429c-be2f-1346de43979e" />
+
+<img width="189" alt="image" src="https://github.com/user-attachments/assets/07afb3d0-dce4-4e3f-84c0-5f32d046b40c" />
+<img width="189" alt="image" src="https://github.com/user-attachments/assets/5f35188a-63dc-4cd7-a41f-b249d66de148" />
+
+<img width="189" alt="image" src="https://github.com/user-attachments/assets/8658a9c7-e6fd-4b0e-bfe8-8fd09eb3b637" />
+
+
+
+## 🛠️ Technology Stack
+
+* **Frontend:** Flutter, Dart
+* **Blockchain:** Solana
+* **Smart Contracts:** Rust
+* **Wallet Management:** Ed25519 Key Pairs
+* **API Integration:** Jupiter Swap API
+* **AI Predictions:** Custom prediction models
+* **Data Storage:** Flutter Secure Storage
+
+## 🚀 Getting Started
+
+### Prerequisites
+
+* Flutter 3.16.0 or higher
+* Dart SDK 3.0.0 or higher
+* Android Studio / VS Code
+* Solana CLI tools (optional)
+
+### Installation
+
+Clone the repository
+
+```
+git clone https://github.com/ZkAGI/PawPad.git
+cd pawpad
+```
+
+Install dependencies
+```
+flutter pub get
+```
+
+Run the app in development mode
+
+```
+flutter run
+``` 
+
+Building for Release
+
+# Generate APK
+```
+flutter build apk --release
+```
+
+# Generate AAB for Google Play
+```
+flutter build appbundle
+```
+
+### 🌊 How It Works
+
+Agent Creation: Users create a trading agent with their preferred strategy
+Secure Wallet: Each agent gets a dedicated Solana wallet with a secure mnemonic
+Signal Processing: Agents check for trading signals at specific intervals:
+
+Bitcoin Buy & Hold - Once daily at 3 PM IST
+Autonomous Trading - Every 12 hours
+Custom Strategies - Every 8 hours
+
+
+Intelligent Trading: When buying signals are detected, agents use Jupiter Swap API to execute trades
+Portfolio Tracking: All transactions are recorded and tracked for performance analysis
+
+### 🧠 AI Integration
+The application uses multiple predictive models to generate trading signals:
+
+Bitcoin Buy & Hold: Daily predictions based on market trends
+<img width="1451" alt="image" src="https://github.com/user-attachments/assets/5b06e7f4-2ffe-432b-8a4d-958c0680e664" />
+Autonomous Trading: Pattern recognition for emerging opportunities
+
+Custom Strategy: Specialized models for selected tokens and timeframes
+
+### 🔭 Future Roadmap
+
+Token selling functionality based on take-profit targets
+Multi-wallet support for diversified strategies
+DeFi integrations (staking, lending)
+Advanced portfolio analytics
+Social trading features
+
+### 👨‍💻 Team
+
+- [Team Member 1] - Role
+- [Team Member 2] - Role
+- [Team Member 3] - Role
+
+### 🔗 Links
+
+- Demo Video
+- Project Pitch Deck
+- Prototype
+
+### 📄 License
+This project is licensed under the MIT License - see the LICENSE file for details.
+
+### 🙏 Acknowledgements
+
+- Solana Foundation for their support and resources
+- Jupiter for their swap API
+- Flutter Community for their excellent documentation and packages
