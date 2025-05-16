@@ -8,6 +8,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../services/agent_provider.dart';
 import '../services/auth_provider.dart';
+import '../utils/image_utils.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({Key? key}) : super(key: key);
@@ -21,6 +22,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
   String? _newImagePath;
   bool _isEditingName = false;
   bool _isLoading = false;
+  bool _isImageValid = true; // Track image validity
+  String? _imageError; // Store image error
+  bool _isCompressingImage = false;
 
   // Available coins list
   final List<String> _availableCoins = [
@@ -58,19 +62,67 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _pickImage() async {
+    setState(() {
+      _isCompressingImage = false;
+      _imageError = null;
+    });
+
     final picker = ImagePicker();
     final picked = await picker.pickImage(
       source: ImageSource.gallery,
-      maxWidth: 800,      // scale down to 800px wide
-      maxHeight: 800,     // scale down to 800px tall
-      imageQuality: 70,   // recompress to 70% quality
+      maxWidth: 800,
+      maxHeight: 800,
+      imageQuality: 70,
     );
 
     if (picked != null) {
-      setState(() => _newImagePath = picked.path);
+      setState(() {
+        _isCompressingImage = true;
+      });
+
+      try {
+        // Check file size
+        final file = File(picked.path);
+        final sizeInKB = await file.length() / 1024;
+
+        if (sizeInKB <= 2) {
+          // File is already small enough
+          setState(() {
+            _newImagePath = picked.path;
+            _isImageValid = true;
+            _isCompressingImage = false;
+          });
+        } else {
+          // Try to compress the image
+          final compressedPath = await ImageUtils.compressAndValidateImage(picked.path);
+
+          if (compressedPath != null) {
+            setState(() {
+              _newImagePath = compressedPath;
+              _isImageValid = true;
+              _imageError = null;
+            });
+          } else {
+            setState(() {
+              _newImagePath = null;
+              _isImageValid = false;
+              _imageError = 'Image is too large and could not be compressed below 2KB. Please choose a smaller image.';
+            });
+          }
+        }
+      } catch (e) {
+        setState(() {
+          _newImagePath = null;
+          _isImageValid = false;
+          _imageError = 'Error processing image: $e';
+        });
+      } finally {
+        setState(() {
+          _isCompressingImage = false;
+        });
+      }
     }
   }
-
 
   void _showAuthenticationDialog() {
     showDialog(
@@ -652,12 +704,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       CircleAvatar(
                         radius: 60,
                         backgroundColor: Colors.grey.shade200,
-                        backgroundImage: _newImagePath != null
+                        backgroundImage: _isCompressingImage
+                            ? null
+                            : _newImagePath != null
                             ? FileImage(File(_newImagePath!))
                             : agentProvider.agentImagePath != null
                             ? FileImage(File(agentProvider.agentImagePath!))
                             : null,
-                        child: (_newImagePath == null && agentProvider.agentImagePath == null)
+                        child: _isCompressingImage
+                            ? const CircularProgressIndicator()
+                            : (_newImagePath == null && agentProvider.agentImagePath == null)
                             ? const Icon(Icons.person, size: 60, color: Colors.grey)
                             : null,
                       ),
@@ -682,6 +738,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       ),
                     ],
                   ),
+                  if (_imageError != null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8.0),
+                      child: Text(
+                        _imageError!,
+                        style: const TextStyle(color: Colors.red, fontSize: 12),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
                   const SizedBox(height: 16),
 
                   //agent name without edit option
@@ -777,112 +842,114 @@ class _SettingsScreenState extends State<SettingsScreen> {
             // Save Changes Button
             SizedBox(
               width: double.infinity,
-              child:ElevatedButton(
-    onPressed: () async {
-    final agentProvider = Provider.of<AgentProvider>(context, listen: false);
-    final ticker = agentProvider.agentName;
+              child: ElevatedButton(
+                onPressed: (!_isImageValid && _newImagePath != null)
+                    ? null
+                    : () async {
+                  final agentProvider = Provider.of<AgentProvider>(context, listen: false);
+                  final ticker = agentProvider.agentName;
 
-    // Check if we have a valid agent name
-    if (ticker == null) {
-    ScaffoldMessenger.of(context).showSnackBar(
-    const SnackBar(
-    content: Text('No agent selected'),
-    backgroundColor: Colors.red,
-    ),
-    );
-    return;
-    }
+                  // Check if we have a valid agent name
+                  if (ticker == null) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('No agent selected'),
+                        backgroundColor: Colors.red,
+                      ),
+                    );
+                    return;
+                  }
 
-    // Check if we need to update the image
-    if (_newImagePath == null) {
-    ScaffoldMessenger.of(context).showSnackBar(
-    const SnackBar(
-    content: Text('No changes to save'),
-    backgroundColor: Colors.orange,
-    ),
-    );
-    return;
-    }
+                  // Check if we need to update the image
+                  if (_newImagePath == null) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('No changes to save'),
+                        backgroundColor: Colors.orange,
+                      ),
+                    );
+                    return;
+                  }
 
-    setState(() => _isLoading = true);
+                  setState(() => _isLoading = true);
 
-    try {
-    // Read the image file and convert to base64
-    final bytes = await File(_newImagePath!).readAsBytes();
-    final base64Img = base64Encode(bytes);
+                  try {
+                    // Read the image file and convert to base64
+                    final bytes = await File(_newImagePath!).readAsBytes();
+                    final base64Img = base64Encode(bytes);
 
-    // Create the API payload
-    final payload = {
-    'ticker': ticker,
-    'ticker_img': base64Img,
-    'addCoins': <String>[],       // empty as required
-    'removeCoins': <String>[],    // empty as required
-    'newTimeframe': '',           // empty as required
-    };
+                    // Create the API payload
+                    final payload = {
+                      'ticker': ticker,
+                      'ticker_img': base64Img,
+                      'addCoins': <String>[],       // empty as required
+                      'removeCoins': <String>[],    // empty as required
+                      'newTimeframe': '',           // empty as required
+                    };
 
-    print('▶️ [update_custom_strategy] Sending image update for ticker: $ticker');
+                    print('▶️ [update_custom_strategy] Sending image update for ticker: $ticker');
 
-    // Make the API call
-    final res = await http.post(
-    Uri.parse('https://zynapse.zkagi.ai/update_custom_strategy'),
-    headers: {
-    'Content-Type': 'application/json',
-    'api-key': 'zk-123321',
-    },
-    body: jsonEncode(payload),
-    );
+                    // Make the API call
+                    final res = await http.post(
+                      Uri.parse('https://zynapse.zkagi.ai/update_custom_strategy'),
+                      headers: {
+                        'Content-Type': 'application/json',
+                        'api-key': 'zk-123321',
+                      },
+                      body: jsonEncode(payload),
+                    );
 
-    print('◀️ [update_custom_strategy] status = ${res.statusCode}');
+                    print('◀️ [update_custom_strategy] status = ${res.statusCode}');
 
-    if (res.statusCode == 200) {
-    // Update local image path only after successful API call
-    await agentProvider.updateAgentImage(_newImagePath!);
+                    if (res.statusCode == 200) {
+                      // Update local image path only after successful API call
+                      await agentProvider.updateAgentImage(_newImagePath!);
 
-    setState(() {
-    _newImagePath = null;  // Reset the new image path
-    });
+                      setState(() {
+                        _newImagePath = null;  // Reset the new image path
+                      });
 
-    ScaffoldMessenger.of(context).showSnackBar(
-    const SnackBar(
-    content: Text('Agent image updated successfully'),
-    backgroundColor: Colors.green,
-    ),
-    );
-    } else {
-    print('◀️ [update_custom_strategy] Error response: ${res.body}');
-    throw Exception('API Error: ${res.statusCode} - ${res.body}');
-    }
-    } catch (e) {
-    print('❌ Exception updating agent image: $e');
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Agent image updated successfully'),
+                          backgroundColor: Colors.green,
+                        ),
+                      );
+                    } else {
+                      print('◀️ [update_custom_strategy] Error response: ${res.body}');
+                      throw Exception('API Error: ${res.statusCode} - ${res.body}');
+                    }
+                  } catch (e) {
+                    print('❌ Exception updating agent image: $e');
 
-    ScaffoldMessenger.of(context).showSnackBar(
-    SnackBar(
-    content: Text('Failed to update agent image: ${e.toString()}'),
-    backgroundColor: Colors.red,
-    ),
-    );
-    } finally {
-    if (mounted) setState(() => _isLoading = false);
-    }
-    },
-    child: _isLoading
-    ? const SizedBox(
-    height: 20,
-    width: 20,
-    child: CircularProgressIndicator(
-    color: Colors.white,
-    strokeWidth: 2,
-    ),
-    )
-        : const Padding(
-    padding: EdgeInsets.symmetric(vertical: 12),
-    child: Text(
-    'Save Changes',
-    style: TextStyle(fontSize: 16),
-    ),
-    ),
-    ),
-            ),
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Failed to update agent image: ${e.toString()}'),
+                        backgroundColor: Colors.red,
+                      ),
+                    );
+                  } finally {
+                    if (mounted) setState(() => _isLoading = false);
+                  }
+                },
+                child: _isLoading
+                    ? const SizedBox(
+                  height: 20,
+                  width: 20,
+                  child: CircularProgressIndicator(
+                    color: Colors.white,
+                    strokeWidth: 2,
+                  ),
+                )
+                    : const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 12),
+                  child: Text(
+                    'Save Changes',
+                    style: TextStyle(fontSize: 16),
+                  ),
+                ),
+              ),
+            )
           ],
         ),
       ),
