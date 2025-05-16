@@ -87,17 +87,20 @@ flutter build appbundle
 
 ### 🌊 How It Works
 
-Agent Creation: Users create a trading agent with their preferred strategy
-Secure Wallet: Each agent gets a dedicated Solana wallet with a secure mnemonic
-Signal Processing: Agents check for trading signals at specific intervals:
+- **Agent Creation**: Users create a trading agent with their preferred strategy
+- **Secure Wallet**: Each agent gets a dedicated Solana wallet with a secure mnemonic
+- **Signal Processing**: Agents check for trading signals at specific intervals:
 
-Bitcoin Buy & Hold - Once daily at 3 PM IST
-Autonomous Trading - Every 12 hours
-Custom Strategies - Every 8 hours
+  - Bitcoin Buy & Hold - Once daily at 3 PM IST
+  - Autonomous Trading - Every 12 hours
+  - Custom Strategies - Every 8 hours
 
 
-Intelligent Trading: When buying signals are detected, agents use Jupiter Swap API to execute trades
-Portfolio Tracking: All transactions are recorded and tracked for performance analysis
+- **Intelligent Trading**: When buying signals are detected, agents use Jupiter Swap API to execute trades
+- **Portfolio Tracking**: All transactions are recorded and tracked for performance analysis
+
+![image](https://github.com/user-attachments/assets/71f67ed0-dd4d-45db-9e66-6c4f48161526)
+
 
 ### 🧠 AI Integration
 The application uses multiple predictive models to generate trading signals:
@@ -124,7 +127,7 @@ Social trading features
 
 ### 🔗 Links
 
-- Demo Video
+- [Demo Video](https://drive.google.com/file/d/1siGU6soCejG2Q3gyNZIDFCjYH-mUB9sV/view?usp=sharing)
 - Project Pitch Deck
 - Prototype
 
