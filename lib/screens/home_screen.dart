@@ -8,6 +8,7 @@ import 'package:image_picker/image_picker.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../services/wallet_storage_service.dart';
+import '../utils/image_utils.dart';
 import '../widgets/gradient_card.dart';
 import '../services/signal_scheduler_service.dart';
 import '../widgets/trending_agents_list.dart';
@@ -762,9 +763,15 @@ class _CreateAgentFormState extends State<CreateAgentForm> {
   final _nameController = TextEditingController();
   String? _imagePath;
   bool _isLoading = false;
+
+  bool _isImageValid = false; // Add this flag to track image validity
+  String? _imageError; // Add this to store error message
+  bool _isCompressingImage = false;
+
   // Add toggle state variables
   bool _bitcoinBuyAndHold = false;
   bool _autonomousTrading = false;
+
 
   // Add near the top of your _CreateAgentFormState class
   bool _showCustomTrading = false;
@@ -857,13 +864,60 @@ class _CreateAgentFormState extends State<CreateAgentForm> {
   }
 
   Future<void> _pickImage() async {
+    setState(() {
+      _isCompressingImage = false;
+      _imageError = null;
+    });
+
     final picker = ImagePicker();
     final pickedFile = await picker.pickImage(source: ImageSource.gallery);
 
     if (pickedFile != null) {
       setState(() {
-        _imagePath = pickedFile.path;
+        _isCompressingImage = true;
       });
+
+      try {
+        // Check file size
+        final file = File(pickedFile.path);
+        final sizeInKB = await file.length() / 1024;
+
+        if (sizeInKB <= 2) {
+          // File is already small enough
+          setState(() {
+            _imagePath = pickedFile.path;
+            _isImageValid = true;
+            _isCompressingImage = false;
+          });
+        } else {
+          // Try to compress the image
+          final compressedPath = await ImageUtils.compressAndValidateImage(pickedFile.path);
+
+          if (compressedPath != null) {
+            setState(() {
+              _imagePath = compressedPath;
+              _isImageValid = true;
+              _imageError = null;
+            });
+          } else {
+            setState(() {
+              _imagePath = null;
+              _isImageValid = false;
+              _imageError = 'Image is too large and could not be compressed below 2KB. Please choose a smaller image.';
+            });
+          }
+        }
+      } catch (e) {
+        setState(() {
+          _imagePath = null;
+          _isImageValid = false;
+          _imageError = 'Error processing image: $e';
+        });
+      } finally {
+        setState(() {
+          _isCompressingImage = false;
+        });
+      }
     }
   }
 
@@ -904,7 +958,18 @@ class _CreateAgentFormState extends State<CreateAgentForm> {
 
   Future<void> _createAgentAndRecord() async {
 
-    if (_bitcoinBuyAndHold || _autonomousTrading || (_showCustomTrading && _selectedCoins.isNotEmpty && _selectedTimeframe != null)) {
+    if (!_isImageValid || _imagePath == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please upload a valid image under 2KB'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+
+  if (_bitcoinBuyAndHold || _autonomousTrading || (_showCustomTrading && _selectedCoins.isNotEmpty && _selectedTimeframe != null)) {
       // Initialize the scheduler service to start checking signals for the new agent
       final schedulerService = SignalSchedulerService();
       schedulerService.initialize(context);
@@ -1440,42 +1505,103 @@ class _CreateAgentFormState extends State<CreateAgentForm> {
             const SizedBox(height: 24),
 
             // Agent image picker
+
             Center(
-              child: Stack(
+              child: Column(
                 children: [
-                  CircleAvatar(
-                    radius: 50,
-                    backgroundColor: Colors.grey.shade200,
-                    backgroundImage: _imagePath != null
-                        ? FileImage(File(_imagePath!))
-                        : null,
-                    child: _imagePath == null
-                        ? const Icon(Icons.person, size: 50, color: Colors.grey)
-                        : null,
-                  ),
-                  Positioned(
-                    bottom: 0,
-                    right: 0,
-                    child: InkWell(
-                      onTap: _pickImage,
-                      child: Container(
-                        padding: const EdgeInsets.all(4),
-                        decoration: const BoxDecoration(
-                          color: Colors.blue,
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Icon(
-                          Icons.camera_alt,
-                          color: Colors.white,
-                          size: 20,
+                  Stack(
+                    children: [
+                      CircleAvatar(
+                        radius: 50,
+                        backgroundColor: Colors.grey.shade200,
+                        backgroundImage: _imagePath != null
+                            ? FileImage(File(_imagePath!))
+                            : null,
+                        child: _isCompressingImage
+                            ? const CircularProgressIndicator()
+                            : _imagePath == null
+                            ? const Icon(Icons.person, size: 50, color: Colors.grey)
+                            : null,
+                      ),
+                      Positioned(
+                        bottom: 0,
+                        right: 0,
+                        child: InkWell(
+                          onTap: _pickImage,
+                          child: Container(
+                            padding: const EdgeInsets.all(4),
+                            decoration: const BoxDecoration(
+                              color: Colors.blue,
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(
+                              Icons.camera_alt,
+                              color: Colors.white,
+                              size: 20,
+                            ),
+                          ),
                         ),
                       ),
-                    ),
+                    ],
                   ),
+                  if (_imageError != null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8.0),
+                      child: Text(
+                        _imageError!,
+                        style: const TextStyle(color: Colors.red, fontSize: 12),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                  if (_imagePath == null && _imageError == null)
+                    const Padding(
+                      padding: EdgeInsets.only(top: 8.0),
+                      child: Text(
+                        'Please upload an image (max 2KB)',
+                        style: TextStyle(color: Colors.amber, fontSize: 12),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
                 ],
               ),
             ),
             const SizedBox(height: 16),
+            // Center(
+            //   child: Stack(
+            //     children: [
+            //       CircleAvatar(
+            //         radius: 50,
+            //         backgroundColor: Colors.grey.shade200,
+            //         backgroundImage: _imagePath != null
+            //             ? FileImage(File(_imagePath!))
+            //             : null,
+            //         child: _imagePath == null
+            //             ? const Icon(Icons.person, size: 50, color: Colors.grey)
+            //             : null,
+            //       ),
+            //       Positioned(
+            //         bottom: 0,
+            //         right: 0,
+            //         child: InkWell(
+            //           onTap: _pickImage,
+            //           child: Container(
+            //             padding: const EdgeInsets.all(4),
+            //             decoration: const BoxDecoration(
+            //               color: Colors.blue,
+            //               shape: BoxShape.circle,
+            //             ),
+            //             child: const Icon(
+            //               Icons.camera_alt,
+            //               color: Colors.white,
+            //               size: 20,
+            //             ),
+            //           ),
+            //         ),
+            //       ),
+            //     ],
+            //   ),
+            // ),
+            // const SizedBox(height: 16),
 
             // Agent name field
             TextFormField(
