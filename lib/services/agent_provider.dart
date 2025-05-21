@@ -96,7 +96,7 @@ class AgentProvider extends ChangeNotifier {
 
         // Create a client - use mainnet instead of devnet!
         final client = SolanaClient(
-          rpcUrl: Uri.parse('https://api.mainnet-beta.solana.com'),
+          rpcUrl: Uri.parse('https://mainnet.helius-rpc.com/?api-key=daee1b98-f564-4352-b8aa-d41654bc0e02'),
           websocketUrl: Uri.parse('wss://api.mainnet-beta.solana.com'),
         );
 

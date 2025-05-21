@@ -67,92 +67,238 @@ class AgentPnLService {
 
   /// Calculate PnL for a specific agent
   static Future<Map<String, dynamic>> calculateAgentPnL(String ticker) async {
+    print('---- PnL calculation START for $ticker ----');
     try {
-      // Get agent activities
       final activities = await getAgentActivities(ticker);
+      print('Raw activities JSON for $ticker: $activities');
 
-      // Initialize values
       double totalPnL = 0.0;
-      bool isBitcoin = activities['isBuyAndHold'] ?? false;
-      bool isAutonomous = activities['isFutureAndOptions'] ?? false;
-      bool isCustomStrategy = activities['isCustomStrategy'] ?? false;
 
-      // Process activities to calculate PnL
-      if (activities.containsKey('activities') && activities['activities'] is List) {
-        List activityList = activities['activities'] as List;
+      // Extract flags from either direct or nested structure
+      bool isBuyAndHold = false;
+      bool isAutonomous = false;
+      bool isCustomStrategy = false;
 
-        // Find buy activities
-        for (var activity in activityList) {
-          if (activity['action'] == 'buy') {
-            double? amount;
-
-            // Try to extract amount
-            if (activity.containsKey('amount')) {
-              amount = double.tryParse(activity['amount'].toString());
-            }
-
-            if (amount != null) {
-              double buyPrice = 0.0;
-              double currentPrice = 0.0;
-
-              // Handle Bitcoin buy
-              if (isBitcoin && (!activity.containsKey('symbol') || activity['symbol'] == 'BTC')) {
-                // Get buy price from activity or use default
-                if (activity.containsKey('buy_price')) {
-                  buyPrice = double.tryParse(activity['buy_price'].toString()) ?? 20000.0;
-                } else {
-                  buyPrice = 20000.0; // Default fallback
-                }
-
-                // Mock current Bitcoin price (replace with API call in production)
-                currentPrice = 32500.0;
-
-                // Calculate PnL
-                double btcPnL = amount * (currentPrice - buyPrice);
-                totalPnL += btcPnL;
-              }
-
-              // Handle autonomous trading buy
-              if ((isAutonomous || isCustomStrategy) && activity.containsKey('symbol') && activity['symbol'] != 'BTC') {
-                String symbol = activity['symbol'];
-
-                // Get entry price
-                if (activity.containsKey('entry_price')) {
-                  buyPrice = double.tryParse(activity['entry_price'].toString()) ?? 0.0;
-                }
-
-                // Get current price based on symbol (mock values)
-                if (symbol == 'ETH') currentPrice = 2350.0;
-                else if (symbol == 'SOL') currentPrice = 165.0;
-                else if (symbol == 'AVAX') currentPrice = 32.8;
-                else currentPrice = 10.0; // Default fallback
-
-                // Calculate PnL
-                double tokenPnL = amount * (currentPrice - buyPrice);
-                totalPnL += tokenPnL;
-              }
-            }
-          }
-        }
+      // Handle nested structure (if response has a data array)
+      List activityList = [];
+      if (activities.containsKey('data') && activities['data'] is List && activities['data'].isNotEmpty) {
+        final dataObj = activities['data'][0];
+        activityList = dataObj['activities'] ?? [];
+        isBuyAndHold = dataObj['isBuyAndHold'] ?? false;
+        isAutonomous = dataObj['isFutureAndOptions'] ?? false;
+        isCustomStrategy = dataObj['isCustomStrategy'] != null;
+      } else {
+        // Direct structure
+        activityList = activities['activities'] is List ? activities['activities'] : [];
+        isBuyAndHold = activities['isBuyAndHold'] ?? false;
+        isAutonomous = activities['isFutureAndOptions'] ?? false;
+        isCustomStrategy = activities['isCustomStrategy'] != null;
       }
 
-      // Return result
+      print('Found ${activityList.length} activities; isBuyAndHold=$isBuyAndHold, isAutonomous=$isAutonomous, isCustom=$isCustomStrategy');
+
+      // For debugging, print all activities to see what we're working with
+      print('Activity types in the data:');
+      for (var i = 0; i < activityList.length; i++) {
+        print('Activity $i - type: ${activityList[i]['type']}, action: ${activityList[i]['action']}');
+      }
+
+      for (var i = 0; i < activityList.length; i++) {
+        final activity = activityList[i];
+
+        // Use OR condition (not AND) to catch all relevant activities
+        bool isBuyActivity = activity['action'] == 'buy';
+        bool isAutonomousBuy = activity['type'] == 'autonomous_buy';
+
+        if (!isBuyActivity && !isAutonomousBuy) {
+          continue; // Skip non-buy activities
+        }
+
+        print('\n→ Processing activity #$i:');
+        print('- type: ${activity['type']}, action: ${activity['action']}');
+
+        // Parse amount - handle both direct values and nested MongoDB-style objects
+        double? amount;
+        if (activity['amount'] is Map && activity['amount'].containsKey('\$numberDouble')) {
+          amount = double.tryParse(activity['amount']['\$numberDouble'].toString());
+        } else if (activity['amount'] != null) {
+          amount = double.tryParse(activity['amount'].toString());
+        }
+
+        print('- amount: $amount');
+
+        if (amount == null || amount == 0) {
+          print('- skipping: invalid or zero amount');
+          continue;
+        }
+
+        // Parse entry price
+        String? entryPriceStr = activity['entryPrice']?.toString() ?? activity['entry_price']?.toString();
+        if (entryPriceStr == null) {
+          print('- skipping: missing entry price');
+          continue;
+        }
+
+        double entryPrice = double.tryParse(entryPriceStr) ?? 0.0;
+        print('- entry price: $entryPrice');
+
+        // Get symbol
+        String? symbol = activity['symbol']?.toString();
+        if (symbol == null) {
+          print('- skipping: missing symbol');
+          continue;
+        }
+        print('- symbol: $symbol');
+
+        // Extract base symbol (remove /USDT if present)
+        final baseSymbol = symbol.contains('/')
+            ? symbol.split('/')[0]
+            : symbol;
+
+        // Get current price (replace with API call in production)
+        double currentPrice;
+        if (baseSymbol == 'BTC') currentPrice = 32500.0;
+        else if (baseSymbol == 'ETH') currentPrice = 2350.0;
+        else if (baseSymbol == 'SOL') currentPrice = 165.0;
+        else if (baseSymbol == 'AVAX') currentPrice = 32.8;
+        else if (baseSymbol == 'TRX') currentPrice = 0.29;
+        else currentPrice = 10.0;
+
+        print('- current price: $currentPrice');
+
+        // Calculate PnL for this activity
+        double pnlForThis = amount * (currentPrice - entryPrice);
+        print('- PnL calculation: $amount * ($currentPrice - $entryPrice) = $pnlForThis');
+
+        // Use 8 decimal places for small values
+        print('- PnL (8 decimals): ${pnlForThis.toStringAsFixed(8)}');
+
+        totalPnL += pnlForThis;
+      }
+
+      // Log total PnL with more decimal places for small values
+      print('\n---- TOTAL PnL for $ticker ----');
+      print('Raw value: $totalPnL');
+      print('2 decimals: ${totalPnL.toStringAsFixed(2)}');
+      print('8 decimals: ${totalPnL.toStringAsFixed(8)}');
+
+      // For very small values, use scientific notation or more decimal places
+      String formattedPnL;
+      if (totalPnL.abs() < 0.01) {
+        formattedPnL = totalPnL.toStringAsFixed(8);
+      } else {
+        formattedPnL = totalPnL.toStringAsFixed(2);
+      }
+
+      print('Formatted for display: $formattedPnL');
+      print('---- PnL calculation END for $ticker ----');
+
       return {
         'ticker': ticker,
         'totalPnL': totalPnL,
-        'isBuyAndHold': isBitcoin,
+        'formattedPnL': formattedPnL,
+        'isBuyAndHold': isBuyAndHold,
         'isFutureAndOptions': isAutonomous,
         'isCustomStrategy': isCustomStrategy,
       };
     } catch (e) {
-      print('Error calculating PnL for agent $ticker: $e');
+      print('Error in PnL calc for $ticker: $e');
       return {
         'ticker': ticker,
         'totalPnL': 0.0,
+        'formattedPnL': '0.00',
         'error': e.toString(),
       };
     }
   }
+
+  // static Future<Map<String, dynamic>> calculateAgentPnL(String ticker) async {
+  //   try {
+  //     // Get agent activities
+  //     final activities = await getAgentActivities(ticker);
+  //
+  //     // Initialize values
+  //     double totalPnL = 0.0;
+  //     bool isBitcoin = activities['isBuyAndHold'] ?? false;
+  //     bool isAutonomous = activities['isFutureAndOptions'] ?? false;
+  //     bool isCustomStrategy = activities['isCustomStrategy'] ?? false;
+  //
+  //     // Process activities to calculate PnL
+  //     if (activities.containsKey('activities') && activities['activities'] is List) {
+  //       List activityList = activities['activities'] as List;
+  //
+  //       // Find buy activities
+  //       for (var activity in activityList) {
+  //         if (activity['action'] == 'buy') {
+  //           double? amount;
+  //
+  //           // Try to extract amount
+  //           if (activity.containsKey('amount')) {
+  //             amount = double.tryParse(activity['amount'].toString());
+  //           }
+  //
+  //           if (amount != null) {
+  //             double buyPrice = 0.0;
+  //             double currentPrice = 0.0;
+  //
+  //             // Handle Bitcoin buy
+  //             if (isBitcoin && (!activity.containsKey('symbol') || activity['symbol'] == 'BTC')) {
+  //               // Get buy price from activity or use default
+  //               if (activity.containsKey('buy_price')) {
+  //                 buyPrice = double.tryParse(activity['buy_price'].toString()) ?? 20000.0;
+  //               } else {
+  //                 buyPrice = 20000.0; // Default fallback
+  //               }
+  //
+  //               // Mock current Bitcoin price (replace with API call in production)
+  //               currentPrice = 32500.0;
+  //
+  //               // Calculate PnL
+  //               double btcPnL = amount * (currentPrice - buyPrice);
+  //               totalPnL += btcPnL;
+  //             }
+  //
+  //             // Handle autonomous trading buy
+  //             if ((isAutonomous || isCustomStrategy) && activity.containsKey('symbol') && activity['symbol'] != 'BTC') {
+  //               String symbol = activity['symbol'];
+  //
+  //               // Get entry price
+  //               if (activity.containsKey('entry_price')) {
+  //                 buyPrice = double.tryParse(activity['entry_price'].toString()) ?? 0.0;
+  //               }
+  //
+  //               // Get current price based on symbol (mock values)
+  //               if (symbol == 'ETH') currentPrice = 2350.0;
+  //               else if (symbol == 'SOL') currentPrice = 165.0;
+  //               else if (symbol == 'AVAX') currentPrice = 32.8;
+  //               else currentPrice = 10.0; // Default fallback
+  //
+  //               // Calculate PnL
+  //               double tokenPnL = amount * (currentPrice - buyPrice);
+  //               totalPnL += tokenPnL;
+  //             }
+  //           }
+  //         }
+  //       }
+  //     }
+  //
+  //     // Return result
+  //     return {
+  //       'ticker': ticker,
+  //       'totalPnL': totalPnL,
+  //       'isBuyAndHold': isBitcoin,
+  //       'isFutureAndOptions': isAutonomous,
+  //       'isCustomStrategy': isCustomStrategy,
+  //     };
+  //   } catch (e) {
+  //     print('Error calculating PnL for agent $ticker: $e');
+  //     return {
+  //       'ticker': ticker,
+  //       'totalPnL': 0.0,
+  //       'error': e.toString(),
+  //     };
+  //   }
+  // }
 
   /// Get trending agents sorted by PnL
   /// This method will refresh the data at most once per hour
