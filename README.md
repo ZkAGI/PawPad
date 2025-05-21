@@ -113,26 +113,23 @@ Custom Strategy: Specialized models for selected tokens and timeframes
 
 ### 🔭 Future Roadmap
 
-Token selling functionality based on take-profit targets
-Multi-wallet support for diversified strategies
-DeFi integrations (staking, lending)
-Advanced portfolio analytics
-Social trading features
+- Launchpad where only Autonomous Agents can Participate 
+- More operations like Autonomous Liquidity Provisioning on Meteora or similar; onboarding specific DefAI projects to connect with PawPad Wallets 
+- Release App on Play store and App Store.
+— And Importantly, specific version for Saga Phone users. 
 
 ### 👨‍💻 Team
 
-- [Team Member 1] - Role
-- [Team Member 2] - Role
-- [Team Member 3] - Role
+- Suraj Venkat
+- Ankita Sahu
+- Aditya Chaplot
+- Nikhil Kumar
 
 ### 🔗 Links
 
 - [Demo Video](https://drive.google.com/file/d/1siGU6soCejG2Q3gyNZIDFCjYH-mUB9sV/view?usp=sharing)
 - Project Pitch Deck
 - Prototype
-
-### 📄 License
-This project is licensed under the MIT License - see the LICENSE file for details.
 
 ### 🙏 Acknowledgements
 
