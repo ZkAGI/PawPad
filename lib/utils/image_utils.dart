@@ -5,7 +5,7 @@ import 'package:path_provider/path_provider.dart';
 class ImageUtils {
   /// Compresses an image and checks if it meets the size requirements
   /// Returns compressed file path if successful, null if unable to meet size requirement
-  static Future<String?> compressAndValidateImage(String imagePath, {int maxSizeKB = 15}) async {
+  static Future<String?> compressAndValidateImage(String imagePath, {int maxSizeKB = 20}) async {
     try {
       // Check original file size
       File imageFile = File(imagePath);

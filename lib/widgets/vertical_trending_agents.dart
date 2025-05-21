@@ -1,5 +1,6 @@
 // import 'package:flutter/material.dart';
-// import '../services/agent_pnl_tracking_service.dart';
+// import 'dart:async';
+// import '../services/agent_pnl_service.dart';
 // import 'gradient_card.dart';
 //
 // /// Widget that displays top 5 trending agents in a vertical list
@@ -14,21 +15,35 @@
 //   List<Map<String, dynamic>> _trendingAgents = [];
 //   bool _isLoading = true;
 //   String? _error;
+//   Timer? _refreshTimer;
 //
 //   @override
 //   void initState() {
 //     super.initState();
 //     _loadTrendingAgents();
+//
+//     // Set up timer to refresh data every hour
+//     _refreshTimer = Timer.periodic(const Duration(hours: 1), (timer) {
+//       if (mounted) {
+//         _loadTrendingAgents(forceRefresh: true);
+//       }
+//     });
 //   }
 //
-//   Future<void> _loadTrendingAgents() async {
+//   @override
+//   void dispose() {
+//     _refreshTimer?.cancel();
+//     super.dispose();
+//   }
+//
+//   Future<void> _loadTrendingAgents({bool forceRefresh = false}) async {
 //     setState(() {
 //       _isLoading = true;
 //       _error = null;
 //     });
 //
 //     try {
-//       final agents = await AgentPnLService.getTrendingAgents();
+//       final agents = await AgentPnLService.getTrendingAgents(forceRefresh: forceRefresh);
 //
 //       if (mounted) {
 //         setState(() {
@@ -48,7 +63,7 @@
 //
 //   @override
 //   Widget build(BuildContext context) {
-//     if (_isLoading) {
+//     if (_isLoading && _trendingAgents.isEmpty) {
 //       return SizedBox(
 //         height: 300,
 //         child: Center(
@@ -57,7 +72,7 @@
 //       );
 //     }
 //
-//     if (_error != null) {
+//     if (_error != null && _trendingAgents.isEmpty) {
 //       return SizedBox(
 //         height: 300,
 //         child: Center(
@@ -67,10 +82,22 @@
 //               Text('Error: $_error', style: TextStyle(color: Colors.red)),
 //               const SizedBox(height: 8),
 //               ElevatedButton(
-//                 onPressed: _loadTrendingAgents,
+//                 onPressed: () => _loadTrendingAgents(forceRefresh: true),
 //                 child: const Text('Retry'),
 //               ),
 //             ],
+//           ),
+//         ),
+//       );
+//     }
+//
+//     if (_trendingAgents.isEmpty) {
+//       return SizedBox(
+//         height: 100,
+//         child: Center(
+//           child: Text(
+//             'No trending agents available',
+//             style: TextStyle(color: Colors.white70),
 //           ),
 //         ),
 //       );
@@ -92,9 +119,16 @@
 //                   color: Colors.white,
 //                 ),
 //               ),
-//               IconButton(
+//               // Show loading indicator when refreshing but still displaying old data
+//               _isLoading
+//                   ? const SizedBox(
+//                 width: 20,
+//                 height: 20,
+//                 child: CircularProgressIndicator(strokeWidth: 2),
+//               )
+//                   : IconButton(
 //                 icon: const Icon(Icons.refresh, color: Colors.white),
-//                 onPressed: _loadTrendingAgents,
+//                 onPressed: () => _loadTrendingAgents(forceRefresh: true),
 //                 tooltip: 'Refresh',
 //               ),
 //             ],
@@ -102,15 +136,11 @@
 //         ),
 //
 //         // Top 5 trending agents in vertical list
-//         ListView.builder(
-//           shrinkWrap: true,
-//           physics: const NeverScrollableScrollPhysics(),
-//           itemCount: _trendingAgents.length > 5 ? 5 : _trendingAgents.length,
-//           itemBuilder: (context, index) {
-//             final agent = _trendingAgents[index];
-//             return _buildAgentCard(agent, index);
-//           },
-//         ),
+//         ..._trendingAgents.asMap().entries.map((entry) {
+//           int index = entry.key;
+//           Map<String, dynamic> agent = entry.value;
+//           return _buildAgentCard(agent, index);
+//         }).toList(),
 //       ],
 //     );
 //   }
@@ -121,6 +151,7 @@
 //     final bool isProfitable = pnl >= 0;
 //     final bool isBitcoin = agent['isBuyAndHold'] ?? false;
 //     final bool isAutonomous = agent['isFutureAndOptions'] ?? false;
+//     final bool isCustomStrategy = agent['isCustomStrategy'] ?? false;
 //
 //     return Card(
 //       margin: const EdgeInsets.only(bottom: 8),
@@ -160,10 +191,12 @@
 //                         children: [
 //                           if (isBitcoin)
 //                             _buildTypeChip('Bitcoin', Colors.orange),
-//                           if (isBitcoin && isAutonomous)
+//                           if (isBitcoin && (isAutonomous || isCustomStrategy))
 //                             const SizedBox(width: 6),
 //                           if (isAutonomous)
 //                             _buildTypeChip('Auto', Colors.blue),
+//                           if (isCustomStrategy)
+//                             _buildTypeChip('Custom', Colors.purple),
 //                         ],
 //                       ),
 //                     ],
@@ -211,10 +244,12 @@
 //       ),
 //     );
 //   }
+//
 // }
 
 import 'package:flutter/material.dart';
 import 'dart:async';
+import 'dart:math' as math;
 import '../services/agent_pnl_service.dart';
 import 'gradient_card.dart';
 
@@ -363,6 +398,20 @@ class _VerticalTrendingAgentsState extends State<VerticalTrendingAgents> {
   Widget _buildAgentCard(Map<String, dynamic> agent, int index) {
     final String ticker = agent['ticker'] ?? 'Unknown';
     final double pnl = agent['totalPnL'] ?? 0.0;
+
+    // Use formattedPnL if available, otherwise format based on value size
+    String displayPnL;
+    if (agent.containsKey('formattedPnL')) {
+      // Use the pre-formatted value from backend
+      displayPnL = agent['formattedPnL'];
+    } else if (pnl.abs() < 0.01) {
+      // For very small values, show more decimal places
+      displayPnL = pnl.toStringAsFixed(8);
+    } else {
+      // For larger values, use standard 2 decimal places
+      displayPnL = pnl.toStringAsFixed(2);
+    }
+
     final bool isProfitable = pnl >= 0;
     final bool isBitcoin = agent['isBuyAndHold'] ?? false;
     final bool isAutonomous = agent['isFutureAndOptions'] ?? false;
@@ -419,7 +468,7 @@ class _VerticalTrendingAgentsState extends State<VerticalTrendingAgents> {
                 ),
               ),
 
-              // Right end: PNL status
+              // Right end: PNL status - UPDATED for small values
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 decoration: BoxDecoration(
@@ -429,7 +478,10 @@ class _VerticalTrendingAgentsState extends State<VerticalTrendingAgents> {
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
-                  '${isProfitable ? "+" : ""}${pnl.toStringAsFixed(2)}',
+                  // Format small values differently
+                  pnl.abs() < 0.01
+                      ? (pnl >= 0 ? '+' : '') + displayPnL // More precise display for tiny values
+                      : (isProfitable ? '+' : '') + displayPnL, // Standard display for larger values
                   style: TextStyle(
                     color: isProfitable ? Colors.green : Colors.red,
                     fontWeight: FontWeight.bold,
