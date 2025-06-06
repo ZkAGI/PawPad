@@ -25,6 +25,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _isImageValid = true; // Track image validity
   String? _imageError; // Store image error
   bool _isCompressingImage = false;
+  bool _notificationsEnabled = false;
 
   // Available coins list
   final List<String> _availableCoins = [
@@ -53,12 +54,43 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (agentName != null) {
       _nameController.text = agentName;
     }
+    // TODO: Load notification preference from local storage or provider
+    _loadNotificationPreference();
   }
 
   @override
   void dispose() {
     _nameController.dispose();
     super.dispose();
+  }
+
+  // Add method to load notification preference
+  Future<void> _loadNotificationPreference() async {
+    // TODO: Load from SharedPreferences or your state management
+    // For now, defaulting to false
+    setState(() {
+      _notificationsEnabled = false;
+    });
+  }
+
+  // Add method to save notification preference
+  Future<void> _saveNotificationPreference(bool enabled) async {
+    // TODO: Save to SharedPreferences or your state management
+    setState(() {
+      _notificationsEnabled = enabled;
+    });
+
+    // Optional: Show confirmation
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+            enabled
+                ? 'Notifications enabled'
+                : 'Notifications disabled'
+        ),
+        backgroundColor: enabled ? Colors.green : Colors.orange,
+      ),
+    );
   }
 
   Future<void> _pickImage() async {
@@ -835,6 +867,47 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 trailing: const Icon(Icons.arrow_forward_ios),
                 onTap: _showCustomStrategyDialog,
               ),
+            ),
+
+            const SizedBox(height: 24),
+
+            // Notifications Section
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Left side: Notifications heading and disclaimer text
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Notifications',
+                        style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'By enabling notifications, you authorize to receive updates on automated trading actions and profit/loss made.',
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: Colors.white70,
+                          fontStyle: FontStyle.italic,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                // Right side: Toggle switch
+                Switch(
+                  value: _notificationsEnabled,
+                  onChanged: _saveNotificationPreference,
+                  activeColor: Colors.purple,
+                ),
+              ],
             ),
 
             const SizedBox(height: 24),

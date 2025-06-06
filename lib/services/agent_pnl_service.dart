@@ -219,7 +219,7 @@ class AgentPnLService {
       };
     }
   }
-  
+
   /// Get trending agents sorted by PnL
   /// This method will refresh the data at most once per hour
   static Future<List<Map<String, dynamic>>> getTrendingAgents({bool forceRefresh = false}) async {
