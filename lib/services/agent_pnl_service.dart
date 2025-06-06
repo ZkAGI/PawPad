@@ -74,6 +74,8 @@ class AgentPnLService {
 
       double totalPnL = 0.0;
 
+      String? tickerImg;
+
       // Extract flags from either direct or nested structure
       bool isBuyAndHold = false;
       bool isAutonomous = false;
@@ -83,19 +85,23 @@ class AgentPnLService {
       List activityList = [];
       if (activities.containsKey('data') && activities['data'] is List && activities['data'].isNotEmpty) {
         final dataObj = activities['data'][0];
+        print("dataObj $dataObj");
         activityList = dataObj['activities'] ?? [];
         isBuyAndHold = dataObj['isBuyAndHold'] ?? false;
         isAutonomous = dataObj['isFutureAndOptions'] ?? false;
         isCustomStrategy = dataObj['isCustomStrategy'] != null;
+        tickerImg = dataObj['ticker_img']?.toString();
       } else {
         // Direct structure
         activityList = activities['activities'] is List ? activities['activities'] : [];
         isBuyAndHold = activities['isBuyAndHold'] ?? false;
         isAutonomous = activities['isFutureAndOptions'] ?? false;
         isCustomStrategy = activities['isCustomStrategy'] != null;
+        tickerImg = activities['ticker_img']?.toString();
       }
 
       print('Found ${activityList.length} activities; isBuyAndHold=$isBuyAndHold, isAutonomous=$isAutonomous, isCustom=$isCustomStrategy');
+      print('ticker_img found: ${tickerImg != null ? "Yes (${tickerImg!.length} chars)" : "No"}');
 
       // For debugging, print all activities to see what we're working with
       print('Activity types in the data:');
@@ -200,6 +206,7 @@ class AgentPnLService {
         'isBuyAndHold': isBuyAndHold,
         'isFutureAndOptions': isAutonomous,
         'isCustomStrategy': isCustomStrategy,
+        'ticker_img': tickerImg,
       };
     } catch (e) {
       print('Error in PnL calc for $ticker: $e');
@@ -208,6 +215,7 @@ class AgentPnLService {
         'totalPnL': 0.0,
         'formattedPnL': '0.00',
         'error': e.toString(),
+        'ticker_img': null,
       };
     }
   }

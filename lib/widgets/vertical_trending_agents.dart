@@ -1,5 +1,8 @@
+// import 'dart:nativewrappers/_internal/vm/lib/typed_data_patch.dart';
+//
 // import 'package:flutter/material.dart';
 // import 'dart:async';
+// import 'dart:math' as math;
 // import '../services/agent_pnl_service.dart';
 // import 'gradient_card.dart';
 //
@@ -148,10 +151,48 @@
 //   Widget _buildAgentCard(Map<String, dynamic> agent, int index) {
 //     final String ticker = agent['ticker'] ?? 'Unknown';
 //     final double pnl = agent['totalPnL'] ?? 0.0;
+//
+//     // Use formattedPnL if available, otherwise format based on value size
+//     String displayPnL;
+//     if (agent.containsKey('formattedPnL')) {
+//       // Use the pre-formatted value from backend
+//       displayPnL = agent['formattedPnL'];
+//     } else if (pnl.abs() < 0.01) {
+//       // For very small values, show more decimal places
+//       displayPnL = pnl.toStringAsFixed(8);
+//     } else {
+//       // For larger values, use standard 2 decimal places
+//       displayPnL = pnl.toStringAsFixed(2);
+//     }
+//
 //     final bool isProfitable = pnl >= 0;
 //     final bool isBitcoin = agent['isBuyAndHold'] ?? false;
 //     final bool isAutonomous = agent['isFutureAndOptions'] ?? false;
 //     final bool isCustomStrategy = agent['isCustomStrategy'] ?? false;
+//
+//     final String? rawBase64 = agent['ticker_img'] as String?;
+//     debugPrint('▶️ rawBase64 (first 30 chars): ${rawBase64?.substring(0, math.min(30, rawBase64.length))}');
+//
+//     // 2) Convert “Unknown” or empty → null, so we know when there’s no real image.
+//     final String? b64 = (rawBase64 == null || rawBase64.isEmpty) ? null : rawBase64;
+//
+//     // 3) If it really is Base64, decode it into a Uint8List.
+//     Uint8List? imageBytes;
+//     if (b64 != null) {
+//       try {
+//         imageBytes = base64Decode(b64);
+//       } catch (_) {
+//         // If decoding fails, treat it as “no image.”
+//         imageBytes = null;
+//         debugPrint('⚠️ Failed to decode Base64 string for agent #$index');
+//       }
+//     }
+//
+//     // 4) Build a MemoryImage if decoding succeeded; otherwise leave it null.
+//     final ImageProvider? avatarImage =
+//     imageBytes != null ? MemoryImage(imageBytes) : null;
+//
+//
 //
 //     return Card(
 //       margin: const EdgeInsets.only(bottom: 8),
@@ -161,15 +202,32 @@
 //           child: Row(
 //             children: [
 //               // Left: Agent image
+//               // CircleAvatar(
+//               //   radius: 24,
+//               //   backgroundColor: Colors.grey.shade200,
+//               //   child: Icon(
+//               //     Icons.person,
+//               //     size: 24,
+//               //     color: Colors.grey.shade700,
+//               //   ),
+//               // ),
 //               CircleAvatar(
 //                 radius: 24,
 //                 backgroundColor: Colors.grey.shade200,
-//                 child: Icon(
+//                 // 2) If you have a valid URL, use it here. Otherwise fall back to Icon:
+//                 backgroundImage: avatarUrl != null
+//                     ? NetworkImage(avatarUrl)
+//                     : null,
+//                 // If backgroundImage fails (e.g. URL is bad), you can keep an Icon fallback:
+//                 child: avatarUrl == null
+//                     ? Icon(
 //                   Icons.person,
 //                   size: 24,
 //                   color: Colors.grey.shade700,
-//                 ),
+//                 )
+//                     : null,
 //               ),
+//
 //
 //               // Middle: Agent name and type
 //               Expanded(
@@ -204,7 +262,7 @@
 //                 ),
 //               ),
 //
-//               // Right end: PNL status
+//               // Right end: PNL status - UPDATED for small values
 //               Container(
 //                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
 //                 decoration: BoxDecoration(
@@ -214,7 +272,10 @@
 //                   borderRadius: BorderRadius.circular(8),
 //                 ),
 //                 child: Text(
-//                   '${isProfitable ? "+" : ""}${pnl.toStringAsFixed(2)}',
+//                   // Format small values differently
+//                   pnl.abs() < 0.01
+//                       ? (pnl >= 0 ? '+' : '') + displayPnL // More precise display for tiny values
+//                       : (isProfitable ? '+' : '') + displayPnL, // Standard display for larger values
 //                   style: TextStyle(
 //                     color: isProfitable ? Colors.green : Colors.red,
 //                     fontWeight: FontWeight.bold,
@@ -244,12 +305,14 @@
 //       ),
 //     );
 //   }
-//
 // }
 
-import 'package:flutter/material.dart';
 import 'dart:async';
+import 'dart:convert';            // For base64Decode
+import 'dart:typed_data';         // For Uint8List
 import 'dart:math' as math;
+
+import 'package:flutter/material.dart';
 import '../services/agent_pnl_service.dart';
 import 'gradient_card.dart';
 
@@ -294,7 +357,7 @@ class _VerticalTrendingAgentsState extends State<VerticalTrendingAgents> {
 
     try {
       final agents = await AgentPnLService.getTrendingAgents(forceRefresh: forceRefresh);
-
+      debugPrint(" agents -> ${agents} ");
       if (mounted) {
         setState(() {
           _trendingAgents = agents;
@@ -353,6 +416,11 @@ class _VerticalTrendingAgentsState extends State<VerticalTrendingAgents> {
       );
     }
 
+    debugPrint("🔍 _trendingAgents (${_trendingAgents.length} items):");
+    for (var i = 0; i < _trendingAgents.length; i++) {
+      debugPrint("  • agent #$i → ${_trendingAgents[i]}");
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -397,13 +465,15 @@ class _VerticalTrendingAgentsState extends State<VerticalTrendingAgents> {
 
   Widget _buildAgentCard(Map<String, dynamic> agent, int index) {
     final String ticker = agent['ticker'] ?? 'Unknown';
-    final double pnl = agent['totalPnL'] ?? 0.0;
+    final double pnl = (agent['totalPnL'] is num)
+        ? (agent['totalPnL'] as num).toDouble()
+        : 0.0;
 
     // Use formattedPnL if available, otherwise format based on value size
     String displayPnL;
     if (agent.containsKey('formattedPnL')) {
       // Use the pre-formatted value from backend
-      displayPnL = agent['formattedPnL'];
+      displayPnL = agent['formattedPnL'].toString();
     } else if (pnl.abs() < 0.01) {
       // For very small values, show more decimal places
       displayPnL = pnl.toStringAsFixed(8);
@@ -413,9 +483,36 @@ class _VerticalTrendingAgentsState extends State<VerticalTrendingAgents> {
     }
 
     final bool isProfitable = pnl >= 0;
-    final bool isBitcoin = agent['isBuyAndHold'] ?? false;
-    final bool isAutonomous = agent['isFutureAndOptions'] ?? false;
-    final bool isCustomStrategy = agent['isCustomStrategy'] ?? false;
+    final bool isBitcoin = agent['isBuyAndHold'] == true;
+    final bool isAutonomous = agent['isFutureAndOptions'] == true;
+    final bool isCustomStrategy = agent['isCustomStrategy'] == true;
+
+    debugPrint('📦 agent #$index → $agent');
+    // 1) Grab the raw Base64 string from your map.
+    final String? rawBase64 = agent['ticker_img'] ;
+    debugPrint(
+      '▶️ rawBase64 (first 30 chars) for agent #$index: '
+          '${rawBase64 != null ? rawBase64.substring(0, math.min(30, rawBase64.length)) : 'null'}',
+    );
+
+    // 2) Convert empty or placeholder → null
+    final String? b64 = (rawBase64 == null || rawBase64.isEmpty) ? null : rawBase64;
+
+    // 3) If it really is Base64, decode it into a Uint8List.
+    Uint8List? imageBytes;
+    if (b64 != null) {
+      try {
+        imageBytes = base64Decode(b64);
+      } catch (e) {
+        // If decoding fails, treat it as “no image.”
+        imageBytes = null;
+        debugPrint('⚠️ Failed to decode Base64 string for agent #$index: $e');
+      }
+    }
+
+    // 4) Build a MemoryImage if decoding succeeded; otherwise leave it null.
+    final ImageProvider<Object>? avatarImage =
+    (imageBytes != null) ? MemoryImage(imageBytes) : null;
 
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
@@ -428,11 +525,14 @@ class _VerticalTrendingAgentsState extends State<VerticalTrendingAgents> {
               CircleAvatar(
                 radius: 24,
                 backgroundColor: Colors.grey.shade200,
-                child: Icon(
+                backgroundImage: avatarImage,
+                child: avatarImage == null
+                    ? Icon(
                   Icons.person,
                   size: 24,
                   color: Colors.grey.shade700,
-                ),
+                )
+                    : null,
               ),
 
               // Middle: Agent name and type
@@ -453,12 +553,10 @@ class _VerticalTrendingAgentsState extends State<VerticalTrendingAgents> {
                       const SizedBox(height: 4),
                       Row(
                         children: [
-                          if (isBitcoin)
-                            _buildTypeChip('Bitcoin', Colors.orange),
+                          if (isBitcoin) _buildTypeChip('Bitcoin', Colors.orange),
                           if (isBitcoin && (isAutonomous || isCustomStrategy))
                             const SizedBox(width: 6),
-                          if (isAutonomous)
-                            _buildTypeChip('Auto', Colors.blue),
+                          if (isAutonomous) _buildTypeChip('Auto', Colors.blue),
                           if (isCustomStrategy)
                             _buildTypeChip('Custom', Colors.purple),
                         ],
@@ -468,7 +566,7 @@ class _VerticalTrendingAgentsState extends State<VerticalTrendingAgents> {
                 ),
               ),
 
-              // Right end: PNL status - UPDATED for small values
+              // Right end: PnL status
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 decoration: BoxDecoration(
@@ -478,10 +576,9 @@ class _VerticalTrendingAgentsState extends State<VerticalTrendingAgents> {
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
-                  // Format small values differently
                   pnl.abs() < 0.01
-                      ? (pnl >= 0 ? '+' : '') + displayPnL // More precise display for tiny values
-                      : (isProfitable ? '+' : '') + displayPnL, // Standard display for larger values
+                      ? (pnl >= 0 ? '+' : '') + displayPnL
+                      : (isProfitable ? '+' : '') + displayPnL,
                   style: TextStyle(
                     color: isProfitable ? Colors.green : Colors.red,
                     fontWeight: FontWeight.bold,
