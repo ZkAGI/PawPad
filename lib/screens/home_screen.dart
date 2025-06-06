@@ -343,57 +343,73 @@ class _HomeScreenState extends State<HomeScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('PawPad'),
-        actions: [
-          // Agent selector with dropdown and icon
-          if (_availableAgents.isNotEmpty)
-            Row(
-              children: [
-                // Agent status icon
-                Stack(
+        titleSpacing: 20, // Add some left padding for the title
+        automaticallyImplyLeading: false,
+        title: Row(
+          children: [
+            // 1) Title on the left
+            const Text(
+              'PawPad',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
+              ),
+            ),
+
+            // 2) Push everything else to the right
+            const Spacer(),
+
+            // 3) Agent dropdown (very compact)
+            if (_availableAgents.isNotEmpty) ...[
+              // Status icon circle (smaller)
+              Container(
+                width: 20,
+                height: 20,
+                margin: const EdgeInsets.only(right: 2),
+                decoration: BoxDecoration(
+                  color: Colors.orange.shade100,
+                  shape: BoxShape.circle,
+                ),
+                child: Stack(
                   children: [
-                    Container(
-                      width: 28,
-                      height: 28,
-                      margin: const EdgeInsets.only(right: 4),
-                      decoration: BoxDecoration(
-                        color: Colors.orange.shade100,
-                        shape: BoxShape.circle,
+                    Center(
+                      child: Icon(
+                        Icons.auto_awesome,
+                        size: 12,
+                        color: Colors.orange.shade700,
                       ),
-                      child: Icon(Icons.auto_awesome, size: 16,
-                          color: Colors.orange.shade700),
                     ),
                     Positioned(
-                      right: 4,
-                      bottom: 0,
+                      right: -1,
+                      bottom: -1,
                       child: Container(
-                        width: 8,
-                        height: 8,
+                        width: 5,
+                        height: 5,
                         decoration: BoxDecoration(
-                          color: Colors.grey, // Grey for inactive state
+                          color: Colors.grey,
                           shape: BoxShape.circle,
-                          border: Border.all(color: Colors.white, width: 1),
+                          border: Border.all(color: Colors.white, width: 0.5),
                         ),
                       ),
                     ),
                   ],
                 ),
+              ),
 
-                // Agent dropdown
-                // In HomeScreen build method, replace the dropdown section:
-
-// Agent dropdown
-                // Inside your build method, modify the DropdownButton:
-                DropdownButton<String>(
-                  // Make sure the value exists in the items list
+              // Constrained dropdown with max width - fixed overflow
+              SizedBox(
+                width: 90, // Fixed width instead of ConstrainedBox to prevent overflow
+                child: DropdownButton<String>(
                   value: _getValidDropdownValue(agentProvider),
                   underline: Container(),
                   dropdownColor: const Color(0xFF000A19),
                   iconEnabledColor: Colors.white,
-                  style: const TextStyle(color: Colors.white, fontSize: 14),
+                  isDense: true,
+                  isExpanded: true, // This prevents overflow
+                  style: const TextStyle(color: Colors.white, fontSize: 12),
                   onChanged: (String? newValue) {
                     if (newValue != null) {
-                      print('Selected new agent: $newValue');
                       setState(() {
                         selectedAgentName = newValue;
                       });
@@ -401,34 +417,177 @@ class _HomeScreenState extends State<HomeScreen> {
                       _refreshBalance();
                     }
                   },
-                  items: _availableAgents.map<DropdownMenuItem<String>>((String value) {
-                    print('Adding dropdown item: $value');
+                  items: _availableAgents
+                      .map<DropdownMenuItem<String>>((String value) {
                     return DropdownMenuItem<String>(
                       value: value,
-                      child: Text(value, style: const TextStyle(fontSize: 14)),
+                      child: Text(
+                        value,
+                        style: const TextStyle(fontSize: 12),
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     );
                   }).toList(),
-                )
-              ],
+                ),
+              ),
+
+              // Minimal gap after dropdown
+              const SizedBox(width: 4),
+            ],
+
+            // 4) Three icons - with tiny spacing for visual appeal
+            GestureDetector(
+              onTap: () {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('You are up to date! No new notifications.'),
+                    behavior: SnackBarBehavior.floating,
+                    duration: Duration(seconds: 2),
+                  ),
+                );
+              },
+              child: const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 4),
+                child: Icon(Icons.notifications_outlined, color: Colors.white, size: 24),
+              ),
             ),
 
-          // Copy wallet address button
-          if (agentProvider.hasAgent)
-            IconButton(
-              icon: const Icon(Icons.copy),
-              color: Colors.white,
-              onPressed: () => _copyWalletAddress(context, agentProvider),
-              tooltip: 'Copy wallet address',
-            ),
+            if (agentProvider.hasAgent)
+              GestureDetector(
+                onTap: () => _copyWalletAddress(context, agentProvider),
+                child: const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 4),
+                  child: Icon(Icons.copy, color: Colors.white, size: 24),
+                ),
+              ),
 
-          // Settings icon
-          IconButton(
-            icon: const Icon(Icons.settings),
-            color: Colors.white,
-            onPressed: () => Navigator.pushNamed(context, '/settings'),
-          ),
-        ],
+            GestureDetector(
+              onTap: () => Navigator.pushNamed(context, '/settings'),
+              child: const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 4),
+                child: Icon(Icons.settings, color: Colors.white, size: 24),
+              ),
+            ),
+          ],
+        ),
       ),
+//       appBar: AppBar(
+//         title: const Text('PawPad'),
+//         actions: [
+//           // Agent selector with dropdown and icon
+//           if (_availableAgents.isNotEmpty)
+//             Row(
+//               mainAxisSize: MainAxisSize.min,
+//               children: [
+//                 // Agent status icon
+//                 Stack(
+//                   children: [
+//                     Container(
+//                       constraints: const BoxConstraints(maxWidth: 120),
+//                       width: 28,
+//                       height: 28,
+//                       margin: const EdgeInsets.only(right: 4),
+//                       decoration: BoxDecoration(
+//                         color: Colors.orange.shade100,
+//                         shape: BoxShape.circle,
+//                       ),
+//                       child: Icon(Icons.auto_awesome, size: 16,
+//                           color: Colors.orange.shade700),
+//                     ),
+//                     Positioned(
+//                       right: 4,
+//                       bottom: 0,
+//                       child: Container(
+//                         width: 8,
+//                         height: 8,
+//                         decoration: BoxDecoration(
+//                           color: Colors.grey, // Grey for inactive state
+//                           shape: BoxShape.circle,
+//                           border: Border.all(color: Colors.white, width: 1),
+//                         ),
+//                       ),
+//                     ),
+//                   ],
+//                 ),
+//
+//                 // Agent dropdown
+//                 // In HomeScreen build method, replace the dropdown section:
+//
+// // Agent dropdown
+//                 // Inside your build method, modify the DropdownButton:
+//                 DropdownButton<String>(
+//                   // Make sure the value exists in the items list
+//                   value: _getValidDropdownValue(agentProvider),
+//                   underline: Container(),
+//                   dropdownColor: const Color(0xFF000A19),
+//                   iconEnabledColor: Colors.white,
+//                   style: const TextStyle(color: Colors.white, fontSize: 14),
+//                   onChanged: (String? newValue) {
+//                     if (newValue != null) {
+//                       print('Selected new agent: $newValue');
+//                       setState(() {
+//                         selectedAgentName = newValue;
+//                       });
+//                       agentProvider.switchToAgent(newValue);
+//                       _refreshBalance();
+//                     }
+//                   },
+//                   items: _availableAgents.map<DropdownMenuItem<String>>((String value) {
+//                     print('Adding dropdown item: $value');
+//                     return DropdownMenuItem<String>(
+//                       value: value,
+//                       child: Text(value, style: const TextStyle(fontSize: 14)),
+//                     );
+//                   }).toList(),
+//                 )
+//               ],
+//             ),
+//
+//           // Notification icon
+//           IconButton(
+//             icon: const Icon(Icons.notifications_outlined),
+//             color: Colors.white,
+//             padding: EdgeInsets.zero,
+//             constraints: const BoxConstraints(
+//               minWidth: 32, minHeight: 32,                    // ← shrink tappable area
+//             ),
+//             onPressed: () {
+//               ScaffoldMessenger.of(context).showSnackBar(
+//                 const SnackBar(
+//                   content: Text('You are up to date! No new notifications.'),
+//                   behavior: SnackBarBehavior.floating,
+//                   duration: Duration(seconds: 2),
+//                 ),
+//               );
+//             },
+//             tooltip: 'Notifications',
+//           ),
+//
+//           // Copy wallet address button
+//           if (agentProvider.hasAgent)
+//             IconButton(
+//               icon: const Icon(Icons.copy),
+//               color: Colors.white,
+//               padding: EdgeInsets.zero,
+//               constraints: const BoxConstraints(
+//                 minWidth: 32, minHeight: 32,                    // ← shrink tappable area
+//               ),
+//               onPressed: () => _copyWalletAddress(context, agentProvider),
+//               tooltip: 'Copy wallet address',
+//             ),
+//
+//           // Settings icon
+//           IconButton(
+//             icon: const Icon(Icons.settings),
+//             color: Colors.white,
+//             padding: EdgeInsets.zero,
+//             constraints: const BoxConstraints(
+//               minWidth: 32, minHeight: 32,                    // ← shrink tappable area
+//             ),
+//             onPressed: () => Navigator.pushNamed(context, '/settings'),
+//           ),
+//         ],
+//       ),
       body: agentProvider.isLoading
           ? const Center(child: CircularProgressIndicator())
           : SingleChildScrollView(
