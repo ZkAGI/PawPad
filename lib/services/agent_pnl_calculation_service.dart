@@ -1,4 +1,6 @@
 import 'dart:convert';
+import 'package:flutter/cupertino.dart';
+import 'package:flutter_js/extensions/fetch.dart';
 import 'package:http/http.dart' as http;
 
 class AgentPnLCalculationService {
@@ -426,6 +428,7 @@ class AgentPnLCalculationService {
     try {
       // Fetch current activities
       final activities = await fetchAgentActivities(ticker);
+      debug("activities ok ${activities}");
 
       if (activities.containsKey('error')) {
         return false;
