@@ -92,6 +92,8 @@ flutter:
   # the material Icons class.
  uses-material-design: true
  assets:
+   - assets/images/eth_logo.png
+   - assets/images/solana_logo.png
    - assets/js/
    #  fonts:
 #    - family: TT Firs Neue

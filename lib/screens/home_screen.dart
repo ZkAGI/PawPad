@@ -16,6 +16,8 @@ import '../widgets/vertical_trending_agents.dart';
 import '../services/agent_pnl_tracking_provider.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
+import 'address_screen.dart';
+
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({Key? key}) : super(key: key);
@@ -416,7 +418,12 @@ class _HomeScreenState extends State<HomeScreen> {
 
             if (agentProvider.hasAgent)
               GestureDetector(
-                onTap: () => _copyWalletAddress(context, agentProvider),
+                onTap: () {
+                     Navigator.of(context).push(
+                           MaterialPageRoute(builder: (_) => const AddressesScreen())
+                         );
+                   },
+              //  onTap: () => _copyWalletAddress(context, agentProvider),
                 child: const Padding(
                   padding: EdgeInsets.symmetric(horizontal: 4),
                   child: Icon(Icons.copy, color: Colors.white, size: 24),
