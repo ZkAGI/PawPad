@@ -7,6 +7,8 @@ import 'dart:typed_data';
 import 'dart:math';
 import 'package:http/http.dart' as http;
 import '../services/solana_swap_service.dart';
+import 'package:web3dart/web3dart.dart';
+import 'package:bip32/bip32.dart' as bip32;
 
 import 'package:solana_hackathon_2025/services/wallet_storage_service.dart'; // For generating random data if needed
 
@@ -19,8 +21,9 @@ class AgentProvider extends ChangeNotifier {
   // Solana connection parameters
   final String _rpcUrl = 'https://api.mainnet-beta.solana.com';
   final String _webSocketUrl = 'wss://api.mainnet-beta.solana.com';
+  final String _ethRpcUrl = 'https://1rpc.io/base';
 
-  static const String _agentNameKey = 'agent_name';
+      static const String _agentNameKey = 'agent_name';
   static const String _agentImagePathKey = 'agent_image_path';
 
   String? _agentName;
@@ -53,6 +56,61 @@ class AgentProvider extends ChangeNotifier {
   String? getAgentWalletAddress(String? agentName) {
     if (agentName == null) return null;
     return _agentWalletAddresses[agentName];
+  }
+
+
+  static const _mnemonicKey = 'mnemonic';
+
+  /// 1. Solana: derive or read mnemonic and return Ed25519HDKeyPair
+  Future<Ed25519HDKeyPair> getOrCreateSolanaWallet() async {
+    // Try to read an existing mnemonic
+    String? mnemonic = await _secureStorage.read(key: _mnemonicKey);
+
+    // If none, generate and persist one
+    if (mnemonic == null) {
+      mnemonic = bip39.generateMnemonic();
+      await _secureStorage.write(key: _mnemonicKey, value: mnemonic);
+    }
+
+    // Derive the Solana keypair
+    return await Ed25519HDKeyPair.fromMnemonic(mnemonic);
+  }
+
+  /// 2. EVM: derive EthPrivateKey from the same mnemonic using BIP-44 path m/44'/60'/0'/0/0
+  Future<EthPrivateKey> getOrCreateEvmWallet() async {
+    // Ensure we have a mnemonic
+    String? mnemonic = await _secureStorage.read(key: _mnemonicKey);
+    if (mnemonic == null) {
+      // If someone called this before solana, make sure to generate & store
+      mnemonic = bip39.generateMnemonic();
+      await _secureStorage.write(key: _mnemonicKey, value: mnemonic);
+    }
+
+    // Convert mnemonic to seed
+    final seed = bip39.mnemonicToSeed(mnemonic);
+
+    // Create a BIP32 root from the seed
+    final root = bip32.BIP32.fromSeed(seed);
+
+    // Derive the Ethereum account at m/44'/60'/0'/0/0
+    final ethNode = root
+        .derivePath("m/44'/60'/0'/0/0");
+
+    // Private key bytes
+    final Uint8List privKey = ethNode.privateKey!;
+
+    // Wrap it in web3dart's EthPrivateKey
+    return EthPrivateKey(privKey);
+  }
+
+  /// 3. A combined convenience method if you really want both at once
+  Future<Map<String, dynamic>> getOrCreateBothWallets() async {
+    final solana = await getOrCreateSolanaWallet();
+    final evm = await getOrCreateEvmWallet();
+    return {
+      'solana': solana,
+      'evm': evm,
+    };
   }
 
   // Get or create wallet using real Solana implementation
@@ -122,6 +180,39 @@ class AgentProvider extends ChangeNotifier {
     }
   }
 
+  Future<Map<String, double>> getBothBalances() async {
+    // 1️⃣ Derive both wallets
+    final wallets = await getOrCreateBothWallets();
+    final Ed25519HDKeyPair solWallet = wallets['solana'];
+    final EthPrivateKey    evmWallet = wallets['evm'];
+
+    // 2️⃣ Fetch Solana balance
+    final solClient = SolanaClient(
+      rpcUrl: Uri.parse(_rpcUrl),
+      websocketUrl: Uri.parse(_webSocketUrl),
+    );
+    final solLamports = (await solClient.rpcClient.getBalance(
+      solWallet.address,
+      commitment: Commitment.confirmed,
+    )).value;
+    final double solBalance = solLamports / lamportsPerSol;
+
+    // 3️⃣ Fetch Ethereum balance
+    final ethClient = Web3Client(_ethRpcUrl, http.Client());
+    final EthereumAddress ethAddress = await evmWallet.extractAddress();
+    final etherAmount = await ethClient.getBalance(ethAddress);
+    // convert Wei to ETH
+    final double ethBalance = etherAmount.getValueInUnit(EtherUnit.ether);
+
+    // 4️⃣ Clean up HTTP client (optional)
+    ethClient.dispose();
+
+    return {
+      'sol': solBalance,
+      'eth': ethBalance,
+    };
+  }
+
   Future<double> getBalance() async {
     final wallet = await getOrCreateWallet();
     final client = SolanaClient(
@@ -145,6 +236,27 @@ class AgentProvider extends ChangeNotifier {
     }
   }
 
+  Future<void> showWalletAddressesAndBalances() async {
+    // 1️⃣ Derive both wallets
+    final wallets   = await getOrCreateBothWallets();
+    final solWallet = wallets['solana'] as Ed25519HDKeyPair;
+    final evmWallet = wallets['evm']    as EthPrivateKey;
+
+    // 2️⃣ Fetch balances
+    final balances  = await getBothBalances();
+    final solBal    = balances['sol']!;
+    final ethBal    = balances['eth']!;
+
+    // 3️⃣ Extract Ethereum address
+    final ethAddress = await evmWallet.extractAddress();
+
+    // 4️⃣ Print to console
+    debugPrint('Solana Wallet  : ${solWallet.address}');
+    debugPrint('Solana Balance : $solBal  SOL');
+    debugPrint('Ethereum Wallet: ${ethAddress.hex}');
+    debugPrint('Ethereum Balance: $ethBal ETH');
+  }
+
   Future<void> initialize() async {
     try {
       _isLoading = true;
@@ -158,18 +270,24 @@ class AgentProvider extends ChangeNotifier {
       final storedWallets = await WalletStorageService.getWalletList();
 
       // Populate the wallet addresses map
-      for (var wallet in storedWallets) {
-        _agentWalletAddresses[wallet['name']] = wallet['address'];
+      // for (var wallet in storedWallets) {
+      //   _agentWalletAddresses[wallet['name']] = wallet['address'];
+      // }
+
+      for (var w in storedWallets) {
+        _agentWalletAddresses[w['name']!] = w['address']!;
       }
 
       _isLoading = false;
       notifyListeners();
+      showWalletAddressesAndBalances();
     } catch (e) {
       debugPrint('Error initializing agent provider: $e');
       _isLoading = false;
       notifyListeners();
     }
   }
+
   // Get or create agent with real wallet address
   // Get or create agent with real wallet address
   Future<void> getOrCreateAgent({

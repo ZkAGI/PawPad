@@ -49,6 +49,8 @@ dependencies:
   bip39: ^1.0.6
   device_info_plus: ^9.0.0
   crypto: ^3.0.3
+  web3dart: ^2.5.5
+  bip32: ^2.0.0
 
 
 dev_dependencies:
