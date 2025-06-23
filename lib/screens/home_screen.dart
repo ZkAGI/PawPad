@@ -979,8 +979,19 @@ class _CreateAgentFormState extends State<CreateAgentForm> {
       return;
     }
 
+    // Future<void> _createAgentAndRecord() async {
+    //   if (!_isImageValid || _imagePath == null) {
+    //     ScaffoldMessenger.of(context).showSnackBar(
+    //       const SnackBar(
+    //         content: Text('Please upload a valid image under 2KB'),
+    //         backgroundColor: Colors.red,
+    //       ),
+    //     );
+    //     return;
+    //   }
 
-  if (_bitcoinBuyAndHold || _autonomousTrading || (_showCustomTrading && _selectedCoins.isNotEmpty && _selectedTimeframe != null)) {
+
+      if (_bitcoinBuyAndHold || _autonomousTrading || (_showCustomTrading && _selectedCoins.isNotEmpty && _selectedTimeframe != null)) {
       // Initialize the scheduler service to start checking signals for the new agent
       final schedulerService = SignalSchedulerService();
       schedulerService.initialize(context);
@@ -1491,6 +1502,25 @@ class _CreateAgentFormState extends State<CreateAgentForm> {
         }
       }
     }
+
+  //
+  //   if (_formKey.currentState!.validate()) {
+  //     // Instead of creating the agent immediately, navigate to balance entry screen
+  //     Navigator.of(context).push(
+  //       MaterialPageRoute(
+  //         builder: (context) => BalanceEntryScreen(
+  //           agentName: _nameController.text,
+  //           imagePath: _imagePath,
+  //           bitcoinBuyAndHold: _bitcoinBuyAndHold,
+  //           autonomousTrading: _autonomousTrading,
+  //           showCustomTrading: _showCustomTrading,
+  //           selectedCoins: _selectedCoins,
+  //           selectedTimeframe: _selectedTimeframe,
+  //         ),
+  //       ),
+  //     );
+  //   }
+  // }
   }
 
   @override
