@@ -113,6 +113,23 @@ class AgentProvider extends ChangeNotifier {
     };
   }
 
+  // Add this method to get both wallet addresses as an object
+  Future<Map<String, String>> getBothWalletAddresses() async {
+    // Get both wallets
+    final wallets = await getOrCreateBothWallets();
+    final Ed25519HDKeyPair solWallet = wallets['solana'];
+    final EthPrivateKey evmWallet = wallets['evm'];
+
+    // Extract addresses
+    final solAddress = solWallet.address;
+    final ethAddress = (await evmWallet.extractAddress()).hex;
+
+    return {
+      'evm': ethAddress,
+      'solana': solAddress,
+    };
+  }
+
   // Get or create wallet using real Solana implementation
   Future<Ed25519HDKeyPair> getOrCreateWallet() async {
     final stored = await _secureStorage.read(key: 'mnemonic');

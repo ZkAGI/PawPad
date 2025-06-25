@@ -49,6 +49,8 @@ class _HomeScreenState extends State<HomeScreen> {
       _checkTradingSignals();
     });
   }
+  // Updated (object with both addresses)
+  final Map<String, Map<String, String>> _agentWalletAddresses = {};
 
   // Add this method to your _HomeScreenState class
   String? _getValidDropdownValue(AgentProvider agentProvider) {
@@ -1019,10 +1021,11 @@ class _CreateAgentFormState extends State<CreateAgentForm> {
         );
 
         // Step 2: Get the wallet address from the agent provider
-        final walletAddress = agentProvider.getAgentWalletAddress(_nameController.text);
-        print('Wallet address retrieved: $walletAddress');
+        //final walletAddress = agentProvider.getAgentWalletAddress(_nameController.text);
+        final walletAddresses = await agentProvider.getBothWalletAddresses();
+        print('Wallet address retrieved: $walletAddresses');
 
-        if (walletAddress == null) {
+        if (walletAddresses == null) {
           throw Exception('Failed to get wallet address for agent');
         }
 
@@ -1401,7 +1404,7 @@ class _CreateAgentFormState extends State<CreateAgentForm> {
         // Step 4: Prepare API request data with activity array
         final requestData = {
           'ticker': _nameController.text,
-          'wallet_address': walletAddress,
+          'wallet': walletAddresses,
           'isFutureAndOptions': _autonomousTrading,
           'isBuyAndHold': _bitcoinBuyAndHold,
           'activity': activity,
