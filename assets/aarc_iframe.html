@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8"/>
+    <meta
+            name="viewport"
+            content="width=device-width, initial-scale=1.0, maximum-scale=1.0"
+    />
+    <script src="https://cdn.aarc.xyz/fundkit-iframe.min.js"></script>
+</head>
+<body style="margin:0;padding:0;display:flex;justify-content:center;align-items:center;height:100vh;">
+<div id="aarc-widget" style="width:100%;max-width:400px;"></div>
+
+<script>
+    FundKitIframe.create({
+      apiKey: "YOUR_API_KEY",          // ← REPLACE with your real key
+      intent: {
+        token: "USDC",
+        amount: "100",
+        fromChain: "Ethereum",
+        toChain: "Polygon",
+        destination: "0xYourRecipient…" // your wallet/contract
+      },
+      theme: "dark",
+      onSuccess: data => {
+        // send success back to Flutter
+        window.flutter_inappwebview.callHandler('onAarcSuccess', data);
+      },
+      onError: err => {
+        window.flutter_inappwebview.callHandler('onAarcError', err);
+      }
+    }).mount("#aarc-widget");
+</script>
+</body>
+</html>
