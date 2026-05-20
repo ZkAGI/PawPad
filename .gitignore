@@ -129,3 +129,12 @@ app.*.symbols
 # Obfuscation related
 # ----------------------------------------
 app.*.map.json
+.env
+.env.*
+!.env.example
+!.env.sample
+*.pem
+oauth_credentials.json
+management-session.json
+logs/
+__pycache__/
